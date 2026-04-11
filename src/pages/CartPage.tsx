@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Minus, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Minus, Plus, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { collections } from '@/data/collections';
+
+const WHATSAPP_NUMBER = '+918328636040';
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -13,11 +15,48 @@ function formatPrice(value: number) {
   }).format(value);
 }
 
+type InquiryItem = {
+  name: string;
+  unitPrice: number;
+  quantity: number;
+  selection: {
+    metal: string;
+    carat: number;
+    diamondType: string;
+  };
+};
+
+function buildCartInquiryHref(items: InquiryItem[], subtotal: number, shipping: number, total: number) {
+  const lines = [
+    'Hi, I would like to inquire about these products:',
+    '',
+    ...items.flatMap((item, index) => {
+      const lineTotal = item.unitPrice * item.quantity;
+      return [
+        `${index + 1}. ${item.name}`,
+        `   Quantity: ${item.quantity}`,
+        `   Unit Price: ${formatPrice(item.unitPrice)}`,
+        `   Metal: ${item.selection.metal || 'N/A'}`,
+        `   Carat: ${item.selection.carat || 0} ct`,
+        `   Diamond Type: ${item.selection.diamondType || 'N/A'}`,
+        `   Line Total: ${formatPrice(lineTotal)}`,
+        '',
+      ];
+    }),
+    `Subtotal: ${formatPrice(subtotal)}`,
+    `Shipping: ${formatPrice(shipping)}`,
+    `Estimated Total: ${formatPrice(total)}`,
+  ];
+
+  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
+}
+
 function CartPage() {
   const { cartItems, totalItems, subtotal, updateQuantity, removeFromCart, clearCart } = useCart();
 
   const shipping = subtotal > 150000 ? 0 : totalItems > 0 ? 1200 : 0;
   const estimatedTotal = subtotal + shipping;
+  const inquiryHref = buildCartInquiryHref(cartItems, subtotal, shipping, estimatedTotal);
 
   const getProductHref = (productId: number) => {
     const collection = collections.find((item) =>
@@ -146,12 +185,14 @@ function CartPage() {
               </div>
             </div>
 
-            <Button className="w-full mt-6 h-12 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
-              <CreditCard className="w-4 h-4 mr-2" />
-              Proceed To Checkout
+            <Button asChild className="w-full mt-6 h-12 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
+              <a href={inquiryHref} target="_blank" rel="noopener noreferrer">
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Inquiry the Shop
+              </a>
             </Button>
             <p className="text-xs text-gray-500 mt-3">
-              Secure checkout integration ready for payment gateway connection.
+              Send your cart details directly on WhatsApp for a quick response.
             </p>
           </>
         )}
@@ -164,8 +205,10 @@ function CartPage() {
               <p className="text-xs text-gray-400">{totalItems} items</p>
               <p className="text-gold font-semibold">{formatPrice(estimatedTotal)}</p>
             </div>
-            <Button className="h-11 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
-              Checkout
+            <Button asChild className="h-11 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
+              <a href={inquiryHref} target="_blank" rel="noopener noreferrer">
+                Inquiry Shop
+              </a>
             </Button>
           </div>
         </div>

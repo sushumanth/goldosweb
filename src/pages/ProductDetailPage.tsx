@@ -174,7 +174,7 @@ function ProductDetailPage() {
             className="inline-flex items-center gap-2 text-gold hover:text-gold-light transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back To Gallery
+            Back to Collection
           </Link>
           <button type="button" className="inline-flex items-center gap-2 text-gray-300 hover:text-gold transition-colors">
             <Share2 className="w-4 h-4" />

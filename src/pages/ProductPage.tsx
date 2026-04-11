@@ -216,7 +216,7 @@ function ProductPage() {
             className="inline-flex items-center gap-2 text-sm text-gold hover:text-gold-light transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back To Gallery
+            Back to Category
           </Link>
           <div className="flex items-center gap-2 md:gap-3">
             <button

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Aurum and Gems favicon">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5D27A"/>
+      <stop offset="45%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#A67C21"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="#0F1116"/>
+  <path d="M14 24L24 16H40L50 24L32 48L14 24Z" fill="none" stroke="url(#gold)" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M14 24H50M24 16L32 24L40 16M32 24V48" fill="none" stroke="url(#gold)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="49" cy="14" r="2.4" fill="#F5D27A"/>
+</svg>
