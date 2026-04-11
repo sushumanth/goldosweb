@@ -15,11 +15,9 @@ import {
 } from '@/lib/shop-api';
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+  return `Rs ${new Intl.NumberFormat('en-IN', {
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(value)}`;
 }
 
 function ProductDetailPage() {
@@ -94,8 +92,13 @@ function ProductDetailPage() {
       return [];
     }
 
-    return Array.from(new Set([...product.gallery, collection?.image ?? '/featured-detail.jpg'])).slice(0, 4);
-  }, [collection?.image, product]);
+    const uniqueProductImages = Array.from(new Set(product.gallery.filter(Boolean)));
+    if (uniqueProductImages.length > 0) {
+      return uniqueProductImages;
+    }
+
+    return [product.image || '/featured-detail.jpg'];
+  }, [product]);
 
   const isProductAvailable = Boolean(product?.inStock);
 

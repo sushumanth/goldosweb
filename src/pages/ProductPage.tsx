@@ -93,12 +93,46 @@ function ProductPage() {
 
   const price = product?.price ?? 0;
 
-  const formatPrice = (value: number) =>
-    new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0,
-    }).format(value);
+  const formatPrice = (value: number) => `Rs ${new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0,
+  }).format(value)}`;
+
+  const formattedDescriptionLines = useMemo(() => {
+    if (!product) {
+      return [] as string[];
+    }
+
+    const rawDescription = (product.longDescription || product.description || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!rawDescription) {
+      return [] as string[];
+    }
+
+    const normalized = rawDescription
+      .replace(/\s*\|\s*/g, ' | ')
+      .replace(
+        /\s+(Category:|Collection:|Base Price:|Original Price:|Making Charge:|Weight:|Purity:|Flags:)/g,
+        ' | $1',
+      );
+
+    const tokens = normalized
+      .split('|')
+      .map((token) => token.trim())
+      .filter(Boolean)
+      .filter((token, index) => {
+        if (index !== 0) {
+          return true;
+        }
+
+        const normalizedToken = token.toLowerCase();
+        const normalizedName = product.name.toLowerCase();
+        return normalizedToken !== normalizedName;
+      });
+
+    return tokens.length > 0 ? tokens : [rawDescription];
+  }, [product]);
 
   const requiresMetal = Boolean(product && product.metalOptions.length > 0);
   const requiresCarat = Boolean(product && product.caratOptions.length > 0);
@@ -342,8 +376,31 @@ function ProductPage() {
 
                 <p className="text-3xl md:text-4xl font-semibold text-gold">{formatPrice(price)}</p>
 
-                {product.longDescription && (
-                  <p className="text-sm text-gray-300 leading-relaxed">{product.longDescription}</p>
+                {formattedDescriptionLines.length > 0 && (
+                  <div className="space-y-1.5">
+                    {formattedDescriptionLines.map((line) => {
+                      const splitIndex = line.indexOf(':');
+                      const hasLabel = splitIndex > 0;
+
+                      if (!hasLabel) {
+                        return (
+                          <p key={line} className="text-sm text-gray-300 leading-relaxed">
+                            {line}
+                          </p>
+                        );
+                      }
+
+                      const label = line.slice(0, splitIndex + 1);
+                      const value = line.slice(splitIndex + 1).trim();
+
+                      return (
+                        <p key={line} className="text-sm text-gray-300 leading-relaxed">
+                          <span className="text-gray-200 font-medium">{label}</span>{' '}
+                          <span>{value}</span>
+                        </p>
+                      );
+                    })}
+                  </div>
                 )}
 
                 <div className="pt-5 border-t border-white/10 space-y-5">
