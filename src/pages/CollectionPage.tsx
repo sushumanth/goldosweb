@@ -231,7 +231,7 @@ function CollectionPage() {
         metal: detectMetal(product.name),
         carat: 3,
         diamondType: product.badges.includes('Lab Grown') ? 'Lab Grown' : 'Natural',
-        size: '6',
+        size: 'N/A',
       },
     });
     toast.success(`${product.name} added to cart.`);

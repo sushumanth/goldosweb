@@ -212,7 +212,7 @@ function App() {
         metal: product.metal,
         carat: 3,
         diamondType: product.metal === 'Diamond' ? 'Natural' : 'Lab-Grown',
-        size: '6',
+        size: 'N/A',
       },
     });
     toast.success(`${product.name} added to cart.`);
@@ -221,6 +221,25 @@ function App() {
   const openProductDialog = (product: typeof products[0]) => {
     setSelectedProduct(product);
     setIsProductDialogOpen(true);
+  };
+
+  const scrollToSection = (sectionId: string) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+
+    const navbarOffset = 88;
+    const top = section.getBoundingClientRect().top + window.scrollY - navbarOffset;
+    window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+  };
+
+  const handleSectionNavigation = (sectionId: string, shouldCloseMobileMenu = false) => {
+    if (shouldCloseMobileMenu) {
+      setIsNavOpen(false);
+    }
+
+    scrollToSection(sectionId);
   };
 
   const formatPrice = (price: number) => {
@@ -255,27 +274,31 @@ function App() {
         <div className="section-padding">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}
-            <a href="#" className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="flex items-center gap-2"
+            >
               <Gem className="w-8 h-8 text-gold" />
               <span className="font-serif text-2xl tracking-wider">
                 Aurum <span className="text-gold">&</span> Gems
               </span>
-            </a>
+            </button>
 
             {/* Desktop Navigation */}
             <div className="hidden lg:flex items-center gap-8">
-              <a href="#collections" className="nav-link text-sm tracking-widest uppercase">Collections</a>
-              <a href="#featured" className="nav-link text-sm tracking-widest uppercase">Featured</a>
-              <a href="#categories" className="nav-link text-sm tracking-widest uppercase">Categories</a>
-              <a href="#products" className="nav-link text-sm tracking-widest uppercase">Shop</a>
-              <a href="#trust" className="nav-link text-sm tracking-widest uppercase">About</a>
+              <button type="button" onClick={() => handleSectionNavigation('collections')} className="nav-link text-sm tracking-widest uppercase">Collections</button>
+              <button type="button" onClick={() => handleSectionNavigation('featured')} className="nav-link text-sm tracking-widest uppercase">Featured</button>
+              <button type="button" onClick={() => handleSectionNavigation('categories')} className="nav-link text-sm tracking-widest uppercase">Categories</button>
+              <button type="button" onClick={() => handleSectionNavigation('products')} className="nav-link text-sm tracking-widest uppercase">Shop</button>
+              <button type="button" onClick={() => handleSectionNavigation('trust')} className="nav-link text-sm tracking-widest uppercase">About</button>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-4">
-              <button className="p-2 hover:text-gold transition-colors">
+              <Link to="/search" className="p-2 hover:text-gold transition-colors" aria-label="Search products">
                 <Search className="w-5 h-5" />
-              </button>
+              </Link>
               <Link
                 to="/wishlist"
                 className="p-2 hover:text-gold transition-colors relative"
@@ -310,11 +333,11 @@ function App() {
                 </SheetTrigger>
                 <SheetContent side="right" className="bg-charcoal border-white/10 w-80">
                   <div className="flex flex-col gap-6 mt-8">
-                    <a href="#collections" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">Collections</a>
-                    <a href="#featured" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">Featured</a>
-                    <a href="#categories" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">Categories</a>
-                    <a href="#products" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">Shop</a>
-                    <a href="#trust" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">About</a>
+                    <button type="button" onClick={() => handleSectionNavigation('collections', true)} className="text-lg hover:text-gold transition-colors text-left">Collections</button>
+                    <button type="button" onClick={() => handleSectionNavigation('featured', true)} className="text-lg hover:text-gold transition-colors text-left">Featured</button>
+                    <button type="button" onClick={() => handleSectionNavigation('categories', true)} className="text-lg hover:text-gold transition-colors text-left">Categories</button>
+                    <button type="button" onClick={() => handleSectionNavigation('products', true)} className="text-lg hover:text-gold transition-colors text-left">Shop</button>
+                    <button type="button" onClick={() => handleSectionNavigation('trust', true)} className="text-lg hover:text-gold transition-colors text-left">About</button>
                     <Link to="/cart" onClick={() => setIsNavOpen(false)} className="text-lg hover:text-gold transition-colors">Cart ({totalItems})</Link>
                     <hr className="border-white/10" />
                     <Button 
@@ -759,14 +782,32 @@ function App() {
               exquisite gold and diamond jewelry.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 border border-white/20 flex items-center justify-center hover:border-gold hover:text-gold transition-colors">
-                <span className="text-sm">FB</span>
+              <a
+                href="https://www.facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook"
+                className="w-12 h-12 border border-white/20 flex items-center justify-center hover:border-gold transition-colors bg-white/5"
+              >
+                <img src="/fblogo.png" alt="Facebook" className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
               </a>
-              <a href="#" className="w-10 h-10 border border-white/20 flex items-center justify-center hover:border-gold hover:text-gold transition-colors">
-                <span className="text-sm">IG</span>
+              <a
+                href="https://www.instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="w-12 h-12 border border-white/20 flex items-center justify-center hover:border-gold transition-colors bg-white/5"
+              >
+                <img src="/intalogo.png" alt="Instagram" className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
               </a>
-              <a href="#" className="w-10 h-10 border border-white/20 flex items-center justify-center hover:border-gold hover:text-gold transition-colors">
-                <span className="text-sm">WA</span>
+              <a
+                href="https://wa.me/919876543210"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="WhatsApp"
+                className="w-12 h-12 border border-white/20 flex items-center justify-center hover:border-gold hover:text-gold transition-colors bg-white/5"
+              >
+                <WhatsAppIcon className="w-5 h-5" />
               </a>
             </div>
           </div>

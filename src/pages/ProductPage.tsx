@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
 import { fetchProductDetailById, type ShopProductDetail } from '@/lib/shop-api';
 
 function ProductPage() {
@@ -18,14 +19,30 @@ function ProductPage() {
   const [product, setProduct] = useState<ShopProductDetail | null>(null);
   const [loadedProductId, setLoadedProductId] = useState<number | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [wishlisted, setWishlisted] = useState(false);
+  const [wishlisted, setWishlisted] = useState(() => getWishlistIds().includes(resolvedProductId));
 
   const [selectedMetal, setSelectedMetal] = useState('');
   const [selectedCarat, setSelectedCarat] = useState(0);
   const [selectedDiamondType, setSelectedDiamondType] = useState('');
-  const [selectedRingSize, setSelectedRingSize] = useState('');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const isLoading = loadedProductId !== resolvedProductId;
+
+  useEffect(() => {
+    const syncWishlist = () => {
+      setWishlisted(getWishlistIds().includes(resolvedProductId));
+    };
+
+    syncWishlist();
+
+    const shopStorageEvent = getShopStorageEventName();
+    window.addEventListener(shopStorageEvent, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+
+    return () => {
+      window.removeEventListener(shopStorageEvent, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+    };
+  }, [resolvedProductId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +61,6 @@ function ProductPage() {
           setSelectedMetal(nextProduct.metalOptions[0] ?? '');
           setSelectedCarat(nextProduct.caratOptions[0] ?? 0);
           setSelectedDiamondType(nextProduct.diamondOptions[0] ?? '');
-          setSelectedRingSize('');
           setActiveImageIndex(0);
         }
       } catch {
@@ -87,15 +103,13 @@ function ProductPage() {
   const requiresMetal = Boolean(product && product.metalOptions.length > 0);
   const requiresCarat = Boolean(product && product.caratOptions.length > 0);
   const requiresDiamondType = Boolean(product && product.diamondOptions.length > 0);
-  const requiresRingSize = Boolean(product && product.ringSizes.length > 0);
 
   const canAddToCart = Boolean(
     product
       && !isAddingToCart
       && (!requiresMetal || selectedMetal)
       && (!requiresCarat || selectedCarat > 0)
-      && (!requiresDiamondType || selectedDiamondType)
-      && (!requiresRingSize || selectedRingSize),
+      && (!requiresDiamondType || selectedDiamondType),
   );
 
   const handleShare = async () => {
@@ -136,7 +150,7 @@ function ProductPage() {
         metal: selectedMetal || 'N/A',
         carat: selectedCarat || 0,
         diamondType: selectedDiamondType || 'N/A',
-        size: selectedRingSize || 'N/A',
+        size: 'N/A',
       },
     });
 
@@ -302,13 +316,13 @@ function ProductPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setWishlisted((prev) => {
-                        const next = !prev;
-                        if (next) {
-                          toast.success(`${productName} added to wishlist.`);
-                        }
-                        return next;
-                      });
+                      const isAdding = !wishlisted;
+                      const nextIds = toggleWishlistItem(product.id);
+                      setWishlisted(nextIds.includes(product.id));
+
+                      if (isAdding) {
+                        toast.success(`${productName} added to wishlist.`);
+                      }
                     }}
                     className="text-gray-300 hover:text-gold transition-colors"
                     aria-label="Add to wishlist"
@@ -337,7 +351,7 @@ function ProductPage() {
                     <p className="text-base text-white mb-2">
                       Metal Type: <span className="text-gold font-semibold">{selectedMetal || 'Not specified'}</span>
                     </p>
-                    {product.metalOptions.length > 0 ? (
+                    {product.metalOptions.length > 1 ? (
                       <div className="flex flex-wrap gap-2">
                         {product.metalOptions.map((option) => (
                           <button
@@ -350,6 +364,8 @@ function ProductPage() {
                           </button>
                         ))}
                       </div>
+                    ) : product.metalOptions.length === 1 ? (
+                      <p className="text-sm text-gray-400">Single metal option available.</p>
                     ) : (
                       <p className="text-sm text-gray-400">No metal variants configured in database.</p>
                     )}
@@ -381,7 +397,7 @@ function ProductPage() {
                     <p className="text-base text-white mb-2">
                       Diamond Type: <span className="text-gold font-semibold">{selectedDiamondType || 'Not specified'}</span>
                     </p>
-                    {product.diamondOptions.length > 0 ? (
+                    {product.diamondOptions.length > 1 ? (
                       <div className="grid grid-cols-2 gap-2">
                         {product.diamondOptions.map((type) => (
                           <button
@@ -394,36 +410,10 @@ function ProductPage() {
                           </button>
                         ))}
                       </div>
+                    ) : product.diamondOptions.length === 1 ? (
+                      <p className="text-sm text-gray-400">Single diamond type available.</p>
                     ) : (
                       <p className="text-sm text-gray-400">No diamond types configured in database.</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between border border-white/20 px-3 py-2.5">
-                      <span className="text-sm text-gray-300">Ring Size:</span>
-                      <select
-                        value={selectedRingSize}
-                        onChange={(event) => setSelectedRingSize(event.target.value)}
-                        className="bg-transparent text-sm text-white focus:outline-none"
-                      >
-                        <option value="" className="bg-charcoal text-white">
-                          Select
-                        </option>
-                        {product.ringSizes.map((size) => {
-                          const disabled = product.unavailableRingSizes.includes(size);
-                          return (
-                            <option key={size} value={size} disabled={disabled} className="bg-charcoal text-white">
-                              {disabled ? `${size} (Unavailable)` : size}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                    {product.ringSizes.length === 0 ? (
-                      <p className="text-xs text-gray-400 mt-2">Ring sizes are not configured for this product.</p>
-                    ) : (
-                      <p className="text-xs text-gray-400 mt-2">*This ring cannot be resized</p>
                     )}
                   </div>
 

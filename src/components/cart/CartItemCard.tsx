@@ -33,7 +33,6 @@ export function CartItemCard({ item, onIncrease, onDecrease, onRemove }: CartIte
             <p>Metal: {item.selection.metal}</p>
             <p>Carat: {item.selection.carat} ct</p>
             <p>Diamond: {item.selection.diamondType}</p>
-            <p>Size: {item.selection.size}</p>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">

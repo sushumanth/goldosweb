@@ -11,6 +11,7 @@ import CartPage from './pages/CartPage.tsx'
 import CollectionPage from './pages/CollectionPage.tsx'
 import ProductDetailPage from './pages/ProductDetailPage.tsx'
 import WishlistPage from './pages/WishlistPage.tsx'
+import SearchPage from './pages/SearchPage.tsx'
 import { CartProvider } from './context/CartContext.tsx'
 
 function ScrollToTop() {
@@ -35,6 +36,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/collections/:slug" element={<CollectionPage />} />
           <Route path="/collections/:slug/product/:productId" element={<ProductDetailPage />} />
           <Route path="/collection/:slug" element={<CollectionPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/wishlist" element={<WishlistPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,16 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Heart, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { collections } from '../data/collections';
-import { clearWishlist, getWishlistIds, removeWishlistItem } from '../lib/shop-storage';
+import { toast } from 'sonner';
 
-type WishlistProduct = {
-  id: number;
-  name: string;
-  price: number;
-  image: string;
-  href: string;
-};
+import { clearWishlist, getShopStorageEventName, getWishlistIds, removeWishlistItem } from '../lib/shop-storage';
+import { products as localProducts, toCategorySlug } from '@/data/catalog';
+import { fetchProductsByIds, type ShopProductCard } from '@/lib/shop-api';
+
+type WishlistProduct = ShopProductCard & { href: string };
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -22,24 +19,100 @@ function formatPrice(value: number) {
 
 function WishlistPage() {
   const [wishlistIds, setWishlistIds] = useState<number[]>(() => getWishlistIds());
+  const [wishlistProducts, setWishlistProducts] = useState<WishlistProduct[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const wishlistProducts = useMemo(() => {
-    const productMap = new Map<number, WishlistProduct>();
-    for (const collection of collections) {
-      for (const product of collection.products) {
-        productMap.set(product.id, {
-          id: product.id,
-          name: product.name,
-          price: Number(product.price.replace(/[^0-9.]/g, '')),
-          image: product.image,
-          href: `/collections/${collection.slug}/product/${product.id}`,
-        });
+  useEffect(() => {
+    const syncWishlist = () => setWishlistIds(getWishlistIds());
+    const shopStorageEvent = getShopStorageEventName();
+
+    window.addEventListener(shopStorageEvent, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+
+    return () => {
+      window.removeEventListener(shopStorageEvent, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadWishlistProducts = async () => {
+      if (wishlistIds.length === 0) {
+        setWishlistProducts([]);
+        setIsLoading(false);
+        return;
       }
-    }
 
-    return wishlistIds
-      .map((id) => productMap.get(id))
-      .filter((item): item is WishlistProduct => Boolean(item));
+      setIsLoading(true);
+
+      try {
+        const payload = await fetchProductsByIds(wishlistIds);
+        if (!isMounted) {
+          return;
+        }
+
+        const supabaseById = new Map(payload.map((item) => [item.id, item]));
+        const localById = new Map(localProducts.map((item) => [item.id, item]));
+
+        const resolved = wishlistIds
+          .map((id) => {
+            const supabaseProduct = supabaseById.get(id);
+            if (supabaseProduct) {
+              return {
+                ...supabaseProduct,
+                href: `/product/${supabaseProduct.id}`,
+              };
+            }
+
+            const localProduct = localById.get(id);
+            if (!localProduct) {
+              return null;
+            }
+
+            return {
+              id: localProduct.id,
+              slug: String(localProduct.id),
+              name: localProduct.name,
+              category: localProduct.category,
+              categorySlug: toCategorySlug(localProduct.category),
+              collectionSlug: null,
+              price: localProduct.price,
+              image: localProduct.image,
+              hoverImage: localProduct.hoverImage,
+              rating: Math.max(1, Math.min(5, Math.round(localProduct.rating))),
+              isNew: localProduct.isNew,
+              isBestSeller: localProduct.isBestSeller,
+              engravable: localProduct.engravable,
+              metal: localProduct.metal,
+              createdAt: localProduct.createdAt,
+              reviewsCount: 0,
+              href: `/category/${toCategorySlug(localProduct.category)}`,
+            } satisfies WishlistProduct;
+          })
+          .filter((item): item is WishlistProduct => Boolean(item));
+
+        setWishlistProducts(resolved);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        setWishlistProducts([]);
+        toast.error('Unable to load wishlist items from Supabase.');
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadWishlistProducts();
+
+    return () => {
+      isMounted = false;
+    };
   }, [wishlistIds]);
 
   const removeItem = (id: number) => {
@@ -61,7 +134,7 @@ function WishlistPage() {
             <ArrowLeft className="w-4 h-4" />
             Continue Shopping
           </Link>
-          <p className="text-sm text-gray-300">{wishlistProducts.length} items</p>
+          <p className="text-sm text-gray-300">{isLoading ? 'Loading...' : `${wishlistProducts.length} items`}</p>
         </div>
       </section>
 
@@ -71,7 +144,22 @@ function WishlistPage() {
           <p className="text-sm text-gray-300">Saved for later</p>
         </div>
 
-        {wishlistProducts.length === 0 ? (
+        {isLoading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="border border-white/10 bg-charcoal-light p-3.5 rounded-2xl">
+                <div className="grid grid-cols-[84px_1fr] gap-3 items-start">
+                  <div className="w-[84px] h-[84px] bg-white/5 rounded-xl skeleton-shimmer" />
+                  <div className="space-y-3">
+                    <div className="h-6 w-3/4 bg-white/5 rounded skeleton-shimmer" />
+                    <div className="h-5 w-1/3 bg-white/5 rounded skeleton-shimmer" />
+                    <div className="h-9 w-24 bg-white/5 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : wishlistProducts.length === 0 ? (
           <div className="border border-white/10 bg-charcoal-light p-6 rounded-2xl">
             <p className="text-gray-300 mb-4">Your wishlist is empty.</p>
             <Link to="/" className="text-gold hover:text-gold-light transition-colors">

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/context/CartContext';
+import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
 import {
   fetchAllCategories,
   fetchProductsByCategorySlug,
@@ -36,13 +37,26 @@ function CategoryPage() {
   const [activeCategory, setActiveCategory] = useState<ShopCategory | null>(null);
   const [allCategories, setAllCategories] = useState<ShopCategory[]>([]);
   const [products, setProducts] = useState<ShopProductCard[]>([]);
-  const [wishlist, setWishlist] = useState<number[]>([]);
+  const [wishlist, setWishlist] = useState<number[]>(() => getWishlistIds());
   const [isLoading, setIsLoading] = useState(true);
 
   const [engravableOnly, setEngravableOnly] = useState(false);
   const [selectedMetals, setSelectedMetals] = useState<string[]>([]);
   const [sortOption, setSortOption] = useState<SortOption>('best-sellers');
   const [maxPriceFilter, setMaxPriceFilter] = useState(0);
+
+  useEffect(() => {
+    const syncWishlist = () => setWishlist(getWishlistIds());
+    const shopStorageEvent = getShopStorageEventName();
+
+    window.addEventListener(shopStorageEvent, syncWishlist);
+    window.addEventListener('storage', syncWishlist);
+
+    return () => {
+      window.removeEventListener(shopStorageEvent, syncWishlist);
+      window.removeEventListener('storage', syncWishlist);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -140,17 +154,14 @@ function CategoryPage() {
   };
 
   const toggleWishlist = (id: number) => {
-    setWishlist((previous) => {
-      const isAdding = !previous.includes(id);
-      if (isAdding) {
-        const productName = products.find((item) => item.id === id)?.name ?? 'Product';
-        toast.success(`${productName} added to wishlist.`);
-      }
+    const isAdding = !wishlist.includes(id);
+    const nextWishlist = toggleWishlistItem(id);
+    setWishlist(nextWishlist);
 
-      return previous.includes(id)
-        ? previous.filter((wishlistId) => wishlistId !== id)
-        : [...previous, id];
-    });
+    if (isAdding) {
+      const productName = products.find((item) => item.id === id)?.name ?? 'Product';
+      toast.success(`${productName} added to wishlist.`);
+    }
   };
 
   const toggleMetal = (metal: string) => {

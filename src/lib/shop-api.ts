@@ -210,6 +210,13 @@ function getDiamondTypeLabel(optionValue: string): string {
   return optionValue.trim();
 }
 
+function normalizeSearchTerm(value: string): string {
+  return value
+    .trim()
+    .replace(/[,%()]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 function resolveProductImages(
   row: Pick<ProductRow, 'image_url' | 'hover_image_url'>,
   orderedProductImages: string[] = [],
@@ -756,4 +763,55 @@ export async function fetchProductDetailById(productId: number): Promise<ShopPro
     ringSizes: availableSizes,
     unavailableRingSizes: unavailableSizes,
   };
+}
+
+export async function searchProducts(query: string, limit = 24): Promise<ShopProductCard[]> {
+  const normalized = normalizeSearchTerm(query);
+  if (normalized.length < 2) {
+    return [];
+  }
+
+  const pattern = `%${normalized.replace(/\s+/g, '%')}%`;
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('is_active', true)
+    .or(`name.ilike.${pattern},slug.ilike.${pattern},sku.ilike.${pattern},description.ilike.${pattern}`)
+    .order('is_best_seller', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as ProductRow[];
+  return getProductCards(rows);
+}
+
+export async function fetchProductsByIds(productIds: number[]): Promise<ShopProductCard[]> {
+  if (productIds.length === 0) {
+    return [];
+  }
+
+  const uniqueIds = Array.from(new Set(productIds));
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .in('id', uniqueIds)
+    .eq('is_active', true);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as ProductRow[];
+  const cards = await getProductCards(rows);
+  const byId = new Map(cards.map((item) => [item.id, item]));
+
+  return uniqueIds
+    .map((id) => byId.get(id))
+    .filter((item): item is ShopProductCard => Boolean(item));
 }
