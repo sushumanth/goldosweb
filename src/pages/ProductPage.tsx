@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Heart, Loader2, Share2, ShoppingBag, Star } from 'lucide-react';
+import { ArrowLeft, Heart, Loader2, Share2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -97,42 +97,57 @@ function ProductPage() {
     maximumFractionDigits: 0,
   }).format(value)}`;
 
-  const formattedDescriptionLines = useMemo(() => {
+  const productInfoRows = useMemo(() => {
     if (!product) {
-      return [] as string[];
+      return [] as Array<{ label: string; value: string }>;
     }
 
     const rawDescription = (product.longDescription || product.description || '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (!rawDescription) {
-      return [] as string[];
+    const detailMap = new Map<string, string>();
+    if (rawDescription) {
+      const normalized = rawDescription
+        .replace(/\s*\|\s*/g, ' | ')
+        .replace(
+          /\s+(Category:|Collection:|Base Price:|Original Price:|Making Charge:|Weight:|Purity:|Flags:)/g,
+          ' | $1',
+        );
+
+      normalized
+        .split('|')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          const splitIndex = line.indexOf(':');
+          if (splitIndex <= 0) {
+            return;
+          }
+
+          const label = line.slice(0, splitIndex).trim().toLowerCase();
+          const value = line.slice(splitIndex + 1).trim();
+          if (value) {
+            detailMap.set(label, value);
+          }
+        });
     }
 
-    const normalized = rawDescription
-      .replace(/\s*\|\s*/g, ' | ')
-      .replace(
-        /\s+(Category:|Collection:|Base Price:|Original Price:|Making Charge:|Weight:|Purity:|Flags:)/g,
-        ' | $1',
-      );
-
-    const tokens = normalized
-      .split('|')
-      .map((token) => token.trim())
-      .filter(Boolean)
-      .filter((token, index) => {
-        if (index !== 0) {
-          return true;
-        }
-
-        const normalizedToken = token.toLowerCase();
-        const normalizedName = product.name.toLowerCase();
-        return normalizedToken !== normalizedName;
-      });
-
-    return tokens.length > 0 ? tokens : [rawDescription];
-  }, [product]);
+    return [
+      { label: 'Category', value: product.category || 'N/A' },
+      { label: 'Price', value: formatPrice(price) },
+      { label: 'Making Charge', value: detailMap.get('making charge') || 'N/A' },
+      { label: 'Metal Type', value: selectedMetal || product.metalOptions[0] || detailMap.get('metal type') || 'N/A' },
+      { label: 'Weight', value: detailMap.get('weight') || 'N/A' },
+      { label: 'Purity', value: detailMap.get('purity') || 'N/A' },
+      {
+        label: 'Collection',
+        value:
+          detailMap.get('collection')
+          || (product.collectionSlug ? product.collectionSlug.replace(/-/g, ' ') : 'N/A'),
+      },
+    ];
+  }, [product, price, selectedMetal]);
 
   const requiresMetal = Boolean(product && product.metalOptions.length > 0);
   const requiresCarat = Boolean(product && product.caratOptions.length > 0);
@@ -365,41 +380,16 @@ function ProductPage() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-0.5 text-gold">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                      <Star key={index} className="w-4 h-4 fill-current" />
-                    ))}
-                  </div>
-                  <span className="text-sm text-gray-300">({product.reviewsCount})</span>
-                </div>
-
                 <p className="text-3xl md:text-4xl font-semibold text-gold">{formatPrice(price)}</p>
 
-                {formattedDescriptionLines.length > 0 && (
-                  <div className="space-y-1.5">
-                    {formattedDescriptionLines.map((line) => {
-                      const splitIndex = line.indexOf(':');
-                      const hasLabel = splitIndex > 0;
-
-                      if (!hasLabel) {
-                        return (
-                          <p key={line} className="text-sm text-gray-300 leading-relaxed">
-                            {line}
-                          </p>
-                        );
-                      }
-
-                      const label = line.slice(0, splitIndex + 1);
-                      const value = line.slice(splitIndex + 1).trim();
-
-                      return (
-                        <p key={line} className="text-sm text-gray-300 leading-relaxed">
-                          <span className="text-gray-200 font-medium">{label}</span>{' '}
-                          <span>{value}</span>
-                        </p>
-                      );
-                    })}
+                {productInfoRows.length > 0 && (
+                  <div className="space-y-1.5 text-sm text-gray-300">
+                    {productInfoRows.map((row) => (
+                      <p key={row.label} className="leading-relaxed">
+                        <span className="text-gray-200 font-medium">{row.label}:</span>{' '}
+                        <span>{row.value}</span>
+                      </p>
+                    ))}
                   </div>
                 )}
 
@@ -426,58 +416,6 @@ function ProductPage() {
                     ) : (
                       <p className="text-sm text-gray-400">No metal variants configured in database.</p>
                     )}
-                  </div>
-
-                  <div>
-                    <p className="text-base text-white mb-2">
-                      Total Carat Weight: <span className="text-gold font-semibold">{selectedCarat > 0 ? `${selectedCarat} ct. tw.` : 'Not specified'}</span>
-                    </p>
-                    {product.caratOptions.length > 0 ? (
-                      <div className="grid grid-cols-5 gap-2">
-                        {product.caratOptions.map((carat) => (
-                          <button
-                            key={carat}
-                            type="button"
-                            onClick={() => setSelectedCarat(carat)}
-                            className={`pdp-option-chip ${selectedCarat === carat ? 'active' : ''}`}
-                          >
-                            {carat}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-400">No carat options configured in database.</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-base text-white mb-2">
-                      Diamond Type: <span className="text-gold font-semibold">{selectedDiamondType || 'Not specified'}</span>
-                    </p>
-                    {product.diamondOptions.length > 1 ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {product.diamondOptions.map((type) => (
-                          <button
-                            key={type}
-                            type="button"
-                            onClick={() => setSelectedDiamondType(type)}
-                            className={`pdp-option-chip ${selectedDiamondType === type ? 'active' : ''}`}
-                          >
-                            {type}
-                          </button>
-                        ))}
-                      </div>
-                    ) : product.diamondOptions.length === 1 ? (
-                      <p className="text-sm text-gray-400">Single diamond type available.</p>
-                    ) : (
-                      <p className="text-sm text-gray-400">No diamond types configured in database.</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1 text-sm">
-                    <p className={product.inStock ? 'text-emerald-400 font-medium' : 'text-amber-400 font-medium'}>
-                      {product.inStock ? 'Product is Available' : 'Product is Currently Unavailable'}
-                    </p>
                   </div>
 
                   <div className="hidden md:grid grid-cols-[1fr_auto] gap-3">

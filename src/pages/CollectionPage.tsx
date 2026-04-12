@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronDown, Heart, Star, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Heart, X } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getWishlistIds, toggleWishlistItem } from '../lib/shop-storage';
@@ -378,24 +378,8 @@ function CollectionPage() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-col md:flex-row md:items-end md:justify-between gap-4 border-t border-white/10 pt-4">
+        <div className="mt-6 border-t border-white/10 pt-4">
           <p className="text-base text-gray-400">{isLoading ? 'Loading...' : `${filteredProducts.length.toLocaleString()} Results`}</p>
-          <div className="flex flex-col sm:flex-row gap-6">
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Sort By</p>
-              <button className="text-xl font-semibold inline-flex items-center gap-2 border-b border-white/30 pb-1 text-white hover:text-gold transition-colors">
-                Best Sellers
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400 mb-1">Shipping Date by</p>
-              <button className="text-xl font-semibold inline-flex items-center gap-2 border-b border-white/30 pb-1 text-white hover:text-gold transition-colors">
-                Any Date
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
         </div>
 
         {isLoading && (
@@ -460,18 +444,6 @@ function CollectionPage() {
                         + {badge}
                       </span>
                     ))}
-                  </div>
-
-                  <div className="mt-2.5 flex items-center gap-1.5 text-gold">
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 5 }).map((_, starIndex) => (
-                        <Star
-                          key={`${product.id}-star-${starIndex}`}
-                          className={`w-3.5 h-3.5 ${starIndex < product.rating ? 'fill-current' : 'text-white/30'}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs text-gray-300">({product.reviews})</span>
                   </div>
 
                   <button

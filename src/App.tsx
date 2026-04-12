@@ -5,7 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { toast } from 'sonner';
 import { 
   Menu, Phone, Mail, MapPin,
-  Heart, Search, Star, Award, Shield, Gem, ShoppingBag,
+  Heart, Search, Award, Shield, Gem, ShoppingBag,
   ArrowRight, Calendar
 } from 'lucide-react';
 
@@ -21,13 +21,53 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/context/CartContext';
-import { categories, products, toCategorySlug } from '@/data/catalog';
-import { collections as landingCollections } from '@/data/collections';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { categories as localCatalogCategories, products } from '@/data/catalog';
+import { collections as localLandingCollections } from '@/data/collections';
 import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
+import { fetchAllCategories, fetchAllCollections, type ShopCategory, type ShopCollection } from '@/lib/shop-api';
 
 gsap.registerPlugin(ScrollTrigger);
 
+const fallbackLandingCollections: ShopCollection[] = localLandingCollections.map((collection, index) => ({
+  id: index + 1,
+  name: collection.name,
+  slug: collection.slug,
+  subtitle: collection.subtitle,
+  description: collection.description,
+  image: collection.image,
+}));
+
+type HomeCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  image: string;
+  count: number;
+};
+
+const fallbackHomeCategories: HomeCategory[] = localCatalogCategories.map((category, index) => ({
+  id: index + 1,
+  name: category.name,
+  slug: category.name.toLowerCase().trim().replace(/\s+/g, '-'),
+  image: category.image,
+  count: category.count,
+}));
+
+function mapShopCategoryToHomeCategory(category: ShopCategory): HomeCategory {
+  const fallbackMatch = fallbackHomeCategories.find((item) => item.slug === category.slug);
+
+  return {
+    id: category.id,
+    name: category.name,
+    slug: category.slug,
+    image: category.image || fallbackMatch?.image || '/cat-rings.jpg',
+    count: category.productCount ?? 0,
+  };
+}
+
 function App() {
+  const isMobile = useIsMobile();
   const { totalItems, addToCart } = useCart();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
@@ -43,6 +83,8 @@ function App() {
   const [isEssentialsVideoReady, setIsEssentialsVideoReady] = useState(false);
   const [hasEssentialsVideoError, setHasEssentialsVideoError] = useState(false);
   const [hoveredCollection, setHoveredCollection] = useState<string | null>(null);
+  const [landingCollections, setLandingCollections] = useState<ShopCollection[]>(fallbackLandingCollections);
+  const [landingCategories, setLandingCategories] = useState<HomeCategory[]>(fallbackHomeCategories);
   const [shouldPlayHeroVideo] = useState(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -190,6 +232,41 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadHomeContent = async () => {
+      const [collectionsResult, categoriesResult] = await Promise.allSettled([
+        fetchAllCollections(),
+        fetchAllCategories(),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (collectionsResult.status === 'fulfilled') {
+        setLandingCollections(collectionsResult.value);
+      } else {
+        setLandingCollections(fallbackLandingCollections);
+        toast.error('Unable to load collections from Supabase. Showing local lookbook.');
+      }
+
+      if (categoriesResult.status === 'fulfilled') {
+        setLandingCategories(categoriesResult.value.map((category) => mapShopCategoryToHomeCategory(category)));
+      } else {
+        setLandingCategories(fallbackHomeCategories);
+        toast.error('Unable to load categories from Supabase. Showing local categories.');
+      }
+    };
+
+    void loadHomeContent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const toggleWishlist = (id: number) => {
     const isAdding = !wishlist.includes(id);
     const updated = toggleWishlistItem(id);
@@ -266,6 +343,9 @@ function App() {
 
     return ranked.slice(0, 3);
   }, []);
+
+  const shouldScrollCollections = isMobile || landingCollections.length > 3;
+  const shouldScrollCategories = isMobile || landingCategories.length > 4;
 
   return (
     <div className="min-h-screen bg-charcoal text-white">
@@ -436,115 +516,123 @@ function App() {
               Step into a world of refined luxury. Our latest collection features bold gold chains, 
               delicate pendants, and statement earrings designed to captivate and inspire.
             </p>
-            <Link to="/collections/bridal-collection" className="btn-luxury inline-flex items-center gap-2">
+            <Link to="/collections" className="btn-luxury inline-flex items-center gap-2">
               View Lookbook
               <ArrowRight className="w-5 h-5" />
             </Link>
           </div>
           
-          <div className="lg:w-2/3 grid grid-cols-1 md:grid-cols-3 gap-6">
-            {landingCollections.map((collection) => (
-              <Link
-                key={collection.name}
-                to={`/collections/${collection.slug}`}
-                className="collection-card group relative overflow-hidden cursor-pointer block"
-                onMouseEnter={() => setHoveredCollection(collection.slug)}
-                onMouseLeave={() => setHoveredCollection(null)}
-              >
-                <div className="relative aspect-[2/3] overflow-hidden bg-charcoal-dark">
-                  <img 
-                    src={collection.image} 
-                    alt={collection.name}
-                    className={`w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 ${
-                      ((collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && isBridalVideoReady && hoveredCollection === 'bridal-collection') ||
-                       (collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && isGoldClassicsVideoReady && hoveredCollection === 'gold-classics') ||
-                       (collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && isEssentialsVideoReady && hoveredCollection === 'diamond-essentials'))
-                        ? 'opacity-0 pointer-events-none'
-                        : 'opacity-100'
-                    } ${
-                      ((collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && !isBridalVideoReady && hoveredCollection === 'bridal-collection') ||
-                       (collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && !isGoldClassicsVideoReady && hoveredCollection === 'gold-classics') ||
-                       (collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && !isEssentialsVideoReady && hoveredCollection === 'diamond-essentials'))
-                        ? 'animate-pulse'
-                        : ''
-                    }`}
-                  />
-
-                  {collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && hoveredCollection === 'bridal-collection' && (
-                    <video
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      preload="metadata"
-                      poster={collection.image}
-                      onCanPlay={() => setIsBridalVideoReady(true)}
-                      onError={() => {
-                        setHasBridalVideoError(true);
-                        setIsBridalVideoReady(false);
-                      }}
-                      className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
-                        isBridalVideoReady ? 'opacity-100' : 'opacity-0'
+          <div className={`lg:w-2/3 max-w-full ${shouldScrollCollections ? 'overflow-x-auto overscroll-x-contain scrollbar-hide pb-2' : ''}`}>
+            <div className={shouldScrollCollections ? 'flex gap-3 sm:gap-6 min-w-max pr-1' : 'grid grid-cols-1 md:grid-cols-3 gap-6'}>
+              {landingCollections.map((collection) => (
+                <Link
+                  key={`${collection.slug}-${collection.id}`}
+                  to={`/collections/${collection.slug}`}
+                  className={`collection-card group relative overflow-hidden cursor-pointer block ${shouldScrollCollections ? 'w-[180px] sm:w-[220px] md:w-[260px] lg:w-[280px] shrink-0' : ''}`}
+                  onMouseEnter={() => setHoveredCollection(collection.slug)}
+                  onMouseLeave={() => setHoveredCollection(null)}
+                >
+                  <div className="relative aspect-[2/3] overflow-hidden bg-charcoal-dark">
+                    <img 
+                      src={collection.image} 
+                      alt={collection.name}
+                      className={`w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 ${
+                        ((collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && isBridalVideoReady && hoveredCollection === 'bridal-collection') ||
+                         (collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && isGoldClassicsVideoReady && hoveredCollection === 'gold-classics') ||
+                         (collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && isEssentialsVideoReady && hoveredCollection === 'diamond-essentials'))
+                          ? 'opacity-0 pointer-events-none'
+                          : 'opacity-100'
+                      } ${
+                        ((collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && !isBridalVideoReady && hoveredCollection === 'bridal-collection') ||
+                         (collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && !isGoldClassicsVideoReady && hoveredCollection === 'gold-classics') ||
+                         (collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && !isEssentialsVideoReady && hoveredCollection === 'diamond-essentials'))
+                          ? 'animate-pulse'
+                          : ''
                       }`}
-                      aria-label="Bridal collection video preview"
-                    >
-                      <source src="/bridalvideo.mp4" type="video/mp4" />
-                    </video>
-                  )}
+                    />
 
-                  {collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && hoveredCollection === 'gold-classics' && (
-                    <video
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      preload="metadata"
-                      poster={collection.image}
-                      onCanPlay={() => setIsGoldClassicsVideoReady(true)}
-                      onError={() => {
-                        setHasGoldClassicsVideoError(true);
-                        setIsGoldClassicsVideoReady(false);
-                      }}
-                      className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
-                        isGoldClassicsVideoReady ? 'opacity-100' : 'opacity-0'
-                      }`}
-                      aria-label="Gold Classics collection video preview"
-                    >
-                      <source src="/clasicalvideo.mp4" type="video/mp4" />
-                    </video>
-                  )}
+                    {collection.slug === 'bridal-collection' && shouldPlayHeroVideo && !hasBridalVideoError && hoveredCollection === 'bridal-collection' && (
+                      <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        poster={collection.image}
+                        onCanPlay={() => setIsBridalVideoReady(true)}
+                        onError={() => {
+                          setHasBridalVideoError(true);
+                          setIsBridalVideoReady(false);
+                        }}
+                        className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
+                          isBridalVideoReady ? 'opacity-100' : 'opacity-0'
+                        }`}
+                        aria-label="Bridal collection video preview"
+                      >
+                        <source src="/bridalvideo.mp4" type="video/mp4" />
+                      </video>
+                    )}
 
-                  {collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && hoveredCollection === 'diamond-essentials' && (
-                    <video
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      preload="metadata"
-                      poster={collection.image}
-                      onCanPlay={() => setIsEssentialsVideoReady(true)}
-                      onError={() => {
-                        setHasEssentialsVideoError(true);
-                        setIsEssentialsVideoReady(false);
-                      }}
-                      className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
-                        isEssentialsVideoReady ? 'opacity-100' : 'opacity-0'
-                      }`}
-                      aria-label="Diamond Essentials collection video preview"
-                    >
-                      <source src="/diamondvideo.mp4" type="video/mp4" />
-                    </video>
-                  )}
+                    {collection.slug === 'gold-classics' && shouldPlayHeroVideo && !hasGoldClassicsVideoError && hoveredCollection === 'gold-classics' && (
+                      <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        poster={collection.image}
+                        onCanPlay={() => setIsGoldClassicsVideoReady(true)}
+                        onError={() => {
+                          setHasGoldClassicsVideoError(true);
+                          setIsGoldClassicsVideoReady(false);
+                        }}
+                        className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
+                          isGoldClassicsVideoReady ? 'opacity-100' : 'opacity-0'
+                        }`}
+                        aria-label="Gold Classics collection video preview"
+                      >
+                        <source src="/clasicalvideo.mp4" type="video/mp4" />
+                      </video>
+                    )}
+
+                    {collection.slug === 'diamond-essentials' && shouldPlayHeroVideo && !hasEssentialsVideoError && hoveredCollection === 'diamond-essentials' && (
+                      <video
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        preload="metadata"
+                        poster={collection.image}
+                        onCanPlay={() => setIsEssentialsVideoReady(true)}
+                        onError={() => {
+                          setHasEssentialsVideoError(true);
+                          setIsEssentialsVideoReady(false);
+                        }}
+                        className={`absolute inset-0 w-full h-full object-cover transform-gpu will-change-opacity transition-all duration-1000 ease-in-out group-hover:scale-110 pointer-events-none ${
+                          isEssentialsVideoReady ? 'opacity-100' : 'opacity-0'
+                        }`}
+                        aria-label="Diamond Essentials collection video preview"
+                      >
+                        <source src="/diamondvideo.mp4" type="video/mp4" />
+                      </video>
+                    )}
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6">
+                    <span className="text-gold text-xs tracking-widest uppercase mb-2 block">
+                      {collection.subtitle || 'Signature Edit'}
+                    </span>
+                    <h3 className="font-serif text-xl text-white">{collection.name}</h3>
+                  </div>
+                </Link>
+              ))}
+
+              {landingCollections.length === 0 && (
+                <div className={`${shouldScrollCollections ? 'w-[280px] shrink-0' : 'md:col-span-3'} border border-white/10 bg-charcoal-light p-6 text-gray-300`}>
+                  Collections are not available right now.
                 </div>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-6">
-                  <span className="text-gold text-xs tracking-widest uppercase mb-2 block">
-                    {collection.subtitle}
-                  </span>
-                  <h3 className="font-serif text-xl text-white">{collection.name}</h3>
-                </div>
-              </Link>
-            ))}
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -602,30 +690,50 @@ function App() {
           <h2 className="heading-lg text-white">Shop by Category</h2>
         </div>
         
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {categories.map((category, index) => (
-            <div key={index} className="category-card group cursor-pointer">
-              <div className="relative overflow-hidden mb-4">
-                <div className="aspect-square">
-                  <img 
-                    src={category.image} 
-                    alt={category.name}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
+        <div className={shouldScrollCategories ? 'max-w-full overflow-x-auto overscroll-x-contain scrollbar-hide pb-2' : ''}>
+          <div className={shouldScrollCategories ? 'flex min-w-max gap-3 sm:gap-6 pr-1' : 'grid grid-cols-2 lg:grid-cols-4 gap-6'}>
+            {landingCategories.map((category) => (
+              <div
+                key={`${category.slug}-${category.id}`}
+                className={`category-card group cursor-pointer ${shouldScrollCategories ? 'w-[190px] sm:w-[240px] md:w-[280px] lg:w-[320px] shrink-0' : ''}`}
+              >
+                <div className="relative overflow-hidden mb-4">
+                  <div className="aspect-square">
+                    <img 
+                      src={category.image} 
+                      alt={category.name}
+                      onError={(event) => {
+                        const target = event.currentTarget;
+                        if (target.dataset.fallbackApplied === 'true') {
+                          return;
+                        }
+
+                        target.dataset.fallbackApplied = 'true';
+                        target.src = fallbackHomeCategories.find((item) => item.slug === category.slug)?.image || '/cat-rings.jpg';
+                      }}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <Link
+                      to={`/category/${category.slug}`}
+                      className="btn-luxury text-sm"
+                    >
+                      Explore
+                    </Link>
+                  </div>
                 </div>
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                  <Link
-                    to={`/category/${toCategorySlug(category.name)}`}
-                    className="btn-luxury text-sm"
-                  >
-                    Explore
-                  </Link>
-                </div>
+                <h3 className="font-serif text-xl text-white text-center">{category.name}</h3>
+                <p className="text-gray-400 text-sm text-center">{category.count.toLocaleString()} {category.count === 1 ? 'Product' : 'Products'}</p>
               </div>
-              <h3 className="font-serif text-xl text-white text-center">{category.name}</h3>
-              <p className="text-gray-400 text-sm text-center">{category.count} Products</p>
-            </div>
-          ))}
+            ))}
+
+            {landingCategories.length === 0 && (
+              <div className={`${shouldScrollCategories ? 'w-[260px] shrink-0' : 'col-span-2 lg:col-span-4'} border border-white/10 bg-charcoal-light p-6 text-center text-gray-300`}>
+                Categories are not available right now.
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -686,10 +794,6 @@ function App() {
                 <h3 className="font-serif text-lg text-white mt-1 mb-2">{product.name}</h3>
                 <div className="flex items-center justify-between">
                   <span className="text-gold font-medium">{formatPrice(product.price)}</span>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-gold text-gold" />
-                    <span className="text-gray-400 text-sm">{product.rating}</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -879,11 +983,6 @@ function App() {
                 <DialogHeader>
                   <DialogTitle className="font-serif text-3xl text-white mt-2">{selectedProduct.name}</DialogTitle>
                 </DialogHeader>
-                <div className="flex items-center gap-2 mt-4">
-                  <Star className="w-5 h-5 fill-gold text-gold" />
-                  <span className="text-white">{selectedProduct.rating}</span>
-                  <span className="text-gray-400">(128 reviews)</span>
-                </div>
                 <p className="text-gold text-2xl font-medium mt-4">{formatPrice(selectedProduct.price)}</p>
                 <DialogDescription className="text-gray-400 mt-4">
                   Exquisite craftsmanship meets timeless design. This stunning piece is 

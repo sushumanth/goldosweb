@@ -5,6 +5,10 @@ type CategoryRow = {
   id: number;
   name: string;
   slug: string;
+  description?: string | null;
+  image_url?: string | null;
+  sort_order?: number | null;
+  created_at?: string | null;
 };
 
 type CollectionRow = {
@@ -14,6 +18,8 @@ type CollectionRow = {
   subtitle: string | null;
   description: string | null;
   image_url: string | null;
+  created_at?: string | null;
+  sort_order?: number | null;
 };
 
 type ProductRow = {
@@ -66,6 +72,9 @@ export type ShopCategory = {
   id: number;
   name: string;
   slug: string;
+  description?: string;
+  image?: string;
+  productCount?: number;
 };
 
 export type ShopCollection = {
@@ -136,6 +145,67 @@ export type ShopProductDetail = {
 };
 
 const fallbackImage = '/collection-1.jpg';
+const collectionFallbackImages = [
+  '/collection-1.jpg',
+  '/collection-2.jpg',
+  '/collection-3.jpg',
+  '/hero-model.jpg',
+  '/featured-main.jpg',
+  '/featured-detail.jpg',
+  '/cat-earrings.jpg',
+  '/cat-necklace.jpg',
+  '/cat-pendant.jpg',
+  '/cat-rings.jpg',
+  '/product-bangle.jpg',
+  '/product-bracelet.jpg',
+  '/product-bridal.jpg',
+  '/product-chain.jpg',
+  '/product-ring.jpg',
+  '/product-studs.jpg',
+];
+const categoryFallbackImages = [
+  '/cat-rings.jpg',
+  '/cat-necklace.jpg',
+  '/cat-earrings.jpg',
+  '/cat-pendant.jpg',
+  '/product-bangle.jpg',
+  '/product-bracelet.jpg',
+  '/product-ring.jpg',
+  '/product-studs.jpg',
+  '/product-chain.jpg',
+  '/hero-model.jpg',
+  '/featured-main.jpg',
+  '/featured-detail.jpg',
+];
+
+function hashSeed(value: string): number {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function getCollectionFallbackImage(seed: string | number): string {
+  if (collectionFallbackImages.length === 0) {
+    return fallbackImage;
+  }
+
+  const seedValue = typeof seed === 'number' ? String(seed) : seed;
+  const index = hashSeed(seedValue) % collectionFallbackImages.length;
+  return collectionFallbackImages[index] ?? fallbackImage;
+}
+
+function getCategoryFallbackImage(seed: string | number): string {
+  if (categoryFallbackImages.length === 0) {
+    return fallbackImage;
+  }
+
+  const seedValue = typeof seed === 'number' ? String(seed) : seed;
+  const index = hashSeed(seedValue) % categoryFallbackImages.length;
+  return categoryFallbackImages[index] ?? fallbackImage;
+}
 
 function normalizeImageUrl(value: string | null | undefined): string | null {
   if (!value) {
@@ -143,7 +213,20 @@ function normalizeImageUrl(value: string | null | undefined): string | null {
   }
 
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  if (/^(https?:)?\/\//i.test(trimmed) || trimmed.startsWith('/') || trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  const normalizedPath = trimmed
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^public\//i, '');
+
+  return `/${normalizedPath}`;
 }
 
 function normalizeSlug(value: string): string {
@@ -189,7 +272,7 @@ function mapLocalCollection(collection: LocalCollection): ShopCollection {
     slug: normalizeSlug(collection.slug),
     subtitle: collection.subtitle,
     description: collection.description,
-    image: collection.image || fallbackImage,
+    image: collection.image || getCollectionFallbackImage(collection.slug || collection.name),
   };
 }
 
@@ -248,8 +331,23 @@ function normalizeCollection(row: CollectionRow): ShopCollection {
     slug: row.slug,
     subtitle: row.subtitle ?? '',
     description: row.description ?? '',
-    image: row.image_url || fallbackImage,
+    image: normalizeImageUrl(row.image_url) ?? getCollectionFallbackImage(`${row.id}-${row.slug}`),
   };
+}
+
+export async function fetchAllCollections(): Promise<ShopCollection[]> {
+  const { data, error } = await supabase
+    .from('collections')
+    .select('id, name, slug, subtitle, description, image_url, sort_order, created_at')
+    .or('is_active.is.null,is_active.eq.true')
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data ?? []) as CollectionRow[]).map((row) => normalizeCollection(row));
 }
 
 function mapProductCard(
@@ -323,6 +421,29 @@ async function getCollectionsByIds(ids: number[]): Promise<Map<number, ShopColle
   const map = new Map<number, ShopCollection>();
   (data as CollectionRow[]).forEach((row) => {
     map.set(row.id, normalizeCollection(row));
+  });
+
+  return map;
+}
+
+async function getProductCountsByCategoryIds(ids: number[]): Promise<Map<number, number>> {
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('category_id')
+    .in('category_id', ids)
+    .eq('is_active', true);
+
+  if (error) {
+    throw error;
+  }
+
+  const map = new Map<number, number>();
+  (data as Array<{ category_id: number }>).forEach((row) => {
+    map.set(row.category_id, (map.get(row.category_id) ?? 0) + 1);
   });
 
   return map;
@@ -442,23 +563,34 @@ async function getProductCards(rows: ProductRow[]): Promise<ShopProductCard[]> {
 export async function fetchAllCategories(): Promise<ShopCategory[]> {
   const { data, error } = await supabase
     .from('categories')
-    .select('id, name, slug')
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true });
+    .select('id, name, slug, description, image_url, sort_order, created_at')
+    .or('is_active.is.null,is_active.eq.true')
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false });
 
   if (error) {
     throw error;
   }
 
-  return (data as CategoryRow[]).map((row) => ({ id: row.id, name: row.name, slug: row.slug }));
+  const rows = (data ?? []) as CategoryRow[];
+  const countsByCategoryId = await getProductCountsByCategoryIds(rows.map((row) => row.id));
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description ?? '',
+    image: normalizeImageUrl(row.image_url) ?? getCategoryFallbackImage(`${row.id}-${row.slug}`),
+    productCount: countsByCategoryId.get(row.id) ?? 0,
+  }));
 }
 
 export async function fetchCategoryBySlug(slug: string): Promise<ShopCategory | null> {
   const { data, error } = await supabase
     .from('categories')
-    .select('id, name, slug')
+    .select('id, name, slug, description, image_url')
     .eq('slug', slug)
-    .eq('is_active', true)
+    .or('is_active.is.null,is_active.eq.true')
     .maybeSingle();
 
   if (error) {
@@ -470,10 +602,15 @@ export async function fetchCategoryBySlug(slug: string): Promise<ShopCategory | 
   }
 
   const category = data as CategoryRow;
+  const countMap = await getProductCountsByCategoryIds([category.id]);
+
   return {
     id: category.id,
     name: category.name,
     slug: category.slug,
+    description: category.description ?? '',
+    image: normalizeImageUrl(category.image_url) ?? getCategoryFallbackImage(`${category.id}-${category.slug}`),
+    productCount: countMap.get(category.id) ?? 0,
   };
 }
 
@@ -521,7 +658,7 @@ export async function fetchCollectionBySlug(slug: string): Promise<ShopCollectio
     .from('collections')
     .select('id, name, slug, subtitle, description, image_url')
     .in('slug', slugVariants)
-    .eq('is_active', true);
+    .or('is_active.is.null,is_active.eq.true');
 
   if (error) {
     const localCollection = findLocalCollectionBySlug(slug);

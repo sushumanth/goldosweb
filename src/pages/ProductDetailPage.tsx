@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Heart, Share2, Star } from 'lucide-react';
+import { ArrowLeft, Heart, Share2 } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -87,6 +87,56 @@ function ProductDetailPage() {
 
   const calculatedPrice = product?.price ?? 0;
 
+  const productInfoRows = useMemo(() => {
+    if (!product) {
+      return [] as Array<{ label: string; value: string }>;
+    }
+
+    const rawDescription = (product.longDescription || product.description || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const detailMap = new Map<string, string>();
+    if (rawDescription) {
+      const normalized = rawDescription
+        .replace(/\s*\|\s*/g, ' | ')
+        .replace(
+          /\s+(Category:|Collection:|Base Price:|Original Price:|Making Charge:|Weight:|Purity:|Flags:)/g,
+          ' | $1',
+        );
+
+      normalized
+        .split('|')
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          const splitIndex = line.indexOf(':');
+          if (splitIndex <= 0) {
+            return;
+          }
+
+          const label = line.slice(0, splitIndex).trim().toLowerCase();
+          const value = line.slice(splitIndex + 1).trim();
+          if (value) {
+            detailMap.set(label, value);
+          }
+        });
+    }
+
+    return [
+      { label: 'Category', value: product.category || 'N/A' },
+      { label: 'Price', value: formatCurrency(calculatedPrice) },
+      { label: 'Making Charge', value: detailMap.get('making charge') || 'N/A' },
+      { label: 'Metal Type', value: selectedMetal || product.metalOptions[0] || detailMap.get('metal type') || 'N/A' },
+      { label: 'Weight', value: detailMap.get('weight') || 'N/A' },
+      { label: 'Purity', value: detailMap.get('purity') || 'N/A' },
+      {
+        label: 'Collection',
+        value: detailMap.get('collection') || collection?.name || (product.collectionSlug ? product.collectionSlug.replace(/-/g, ' ') : 'N/A'),
+      },
+    ];
+  }, [product, calculatedPrice, selectedMetal, collection?.name]);
+
   const gallery = useMemo(() => {
     if (!product) {
       return [];
@@ -99,8 +149,6 @@ function ProductDetailPage() {
 
     return [product.image || '/featured-detail.jpg'];
   }, [product]);
-
-  const isProductAvailable = Boolean(product?.inStock);
 
   if (!isLoading && (!collection || !product)) {
     return (
@@ -132,8 +180,6 @@ function ProductDetailPage() {
     );
   }
 
-  const diamondType = selectedDiamondType || 'Not specified';
-
   const handleAddToCart = () => {
     addToCart({
       productId: product.id,
@@ -149,9 +195,7 @@ function ProductDetailPage() {
       },
     });
 
-    setCartMessage(
-      `Added to cart: ${selectedMetal || 'N/A'}, ${selectedCaratWeight || 'N/A'} ct. tw., ${diamondType}.`,
-    );
+    setCartMessage(`Added to cart: ${selectedMetal || 'N/A'}.`);
     toast.success(`${product.name} added to cart.`);
   };
 
@@ -200,12 +244,12 @@ function ProductDetailPage() {
 
             <div className="mt-4 border border-white/10 bg-charcoal-light">
               <div className="grid grid-cols-2 text-sm">
-                <div className="p-3 border-b border-white/10 text-gray-300">Stock Number</div>
-                <div className="p-3 border-b border-white/10 text-right text-white">{product.sku || product.slug.toUpperCase()}</div>
                 <div className="p-3 border-b border-white/10 text-gray-300">Category</div>
                 <div className="p-3 border-b border-white/10 text-right text-white">{product.category}</div>
-                <div className="p-3 text-gray-300">Availability</div>
-                <div className="p-3 text-right text-white">{product.inStock ? 'In Stock' : 'Out of Stock'}</div>
+                <div className="p-3 border-b border-white/10 text-gray-300">Collection</div>
+                <div className="p-3 border-b border-white/10 text-right text-white">{collection.name}</div>
+                <div className="p-3 text-gray-300">Metal Type</div>
+                <div className="p-3 text-right text-white">{selectedMetal || product.metalOptions[0] || 'N/A'}</div>
               </div>
             </div>
           </div>
@@ -223,28 +267,20 @@ function ProductDetailPage() {
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-1.5 text-gold">
-              <div className="flex items-center gap-0.5">
-                {Array.from({ length: 5 }).map((_, starIndex) => (
-                  <Star
-                    key={`detail-star-${starIndex}`}
-                    className={`w-4 h-4 ${starIndex < product.rating ? 'fill-current' : 'text-white/30'}`}
-                  />
-                ))}
-              </div>
-              <span className="text-sm text-gray-300">({product.reviewsCount})</span>
-            </div>
-
             <p className="text-4xl font-semibold text-gold mt-6">{formatCurrency(calculatedPrice)}</p>
 
-            <div className="mt-6 pt-5 border-t border-white/10 space-y-4">
-              <p className={`text-sm font-medium ${isProductAvailable ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {isProductAvailable ? 'Product is Available' : 'Product is Currently Unavailable'}
-              </p>
-              <a href="#" className="inline-flex text-sm text-gold hover:text-gold-light transition-colors">
-                Free Overnight Shipping Hassle-Free Returns
-              </a>
+            {productInfoRows.length > 0 && (
+              <div className="mt-6 space-y-1.5 text-sm text-gray-300">
+                {productInfoRows.map((row) => (
+                  <p key={row.label} className="leading-relaxed">
+                    <span className="text-gray-200 font-medium">{row.label}:</span>{' '}
+                    <span>{row.value}</span>
+                  </p>
+                ))}
+              </div>
+            )}
 
+            <div className="mt-6 pt-5 border-t border-white/10 space-y-4">
               <button
                 type="button"
                 onClick={handleAddToCart}
@@ -252,103 +288,10 @@ function ProductDetailPage() {
               >
                 ADD TO CART
               </button>
-              <button
-                type="button"
-                className="w-full h-12 border border-white/30 text-white hover:border-gold hover:text-gold transition-colors"
-              >
-                CONSULT AN EXPERT
-              </button>
 
               {cartMessage && (
                 <p className="text-xs text-gold">{cartMessage}</p>
               )}
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-white/10 space-y-6">
-              <div>
-                <p className="text-xl text-white">
-                  Metal Type: <span className="text-gold font-semibold">{selectedMetal || 'Not specified'}</span>
-                </p>
-                {product.metalOptions.length > 1 ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {product.metalOptions.map((metalOption) => (
-                      <button
-                        key={metalOption}
-                        type="button"
-                        onClick={() => setSelectedMetal(metalOption)}
-                        className={`h-11 px-4 border text-sm ${
-                          selectedMetal === metalOption
-                            ? 'border-gold text-gold bg-gold/10'
-                            : 'border-white/20 text-gray-300 hover:border-gold/60 hover:text-gold'
-                        }`}
-                      >
-                        {metalOption}
-                      </button>
-                    ))}
-                  </div>
-                ) : product.metalOptions.length === 1 ? (
-                  <p className="mt-3 text-sm text-gray-400">Single metal option available.</p>
-                ) : (
-                  <p className="mt-3 text-sm text-gray-400">No metal variants configured in database.</p>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xl text-white">
-                  Total Carat Weight: <span className="text-gold font-semibold">{selectedCaratWeight ? `${selectedCaratWeight} ct. tw.` : 'Not specified'} {formatCurrency(calculatedPrice)}</span>
-                </p>
-                {product.caratOptions.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-5 sm:grid-cols-9 gap-2">
-                    {product.caratOptions.map((size) => {
-                      const value = String(size);
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => setSelectedCaratWeight(value)}
-                          className={`h-11 border text-sm ${
-                            value === selectedCaratWeight
-                              ? 'border-gold text-gold bg-gold/10'
-                              : 'border-white/20 text-gray-300 hover:border-gold/60 hover:text-gold'
-                          }`}
-                        >
-                          {value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm text-gray-400">No carat options configured in database.</p>
-                )}
-              </div>
-
-              <div>
-                <p className="text-xl text-white">
-                  Diamond Type: <span className="text-gold font-semibold">{diamondType}</span>
-                </p>
-                {product.diamondOptions.length > 1 ? (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {product.diamondOptions.map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => setSelectedDiamondType(option)}
-                        className={`h-12 border text-sm ${
-                          selectedDiamondType === option
-                            ? 'border-gold text-gold bg-gold/10'
-                            : 'border-white/20 text-gray-300 hover:border-gold/60 hover:text-gold'
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                ) : product.diamondOptions.length === 1 ? (
-                  <p className="mt-3 text-sm text-gray-400">Single diamond type available.</p>
-                ) : (
-                  <p className="mt-3 text-sm text-gray-400">No diamond type variants configured in database.</p>
-                )}
-              </div>
             </div>
 
           </div>
@@ -395,17 +338,6 @@ function ProductDetailPage() {
                   </h3>
                   <p className="text-lg text-gold mt-1">{item.price}</p>
 
-                  <div className="mt-2.5 flex items-center gap-1.5 text-gold">
-                    <div className="flex items-center gap-0.5">
-                      {Array.from({ length: 5 }).map((_, starIndex) => (
-                        <Star
-                          key={`${item.id}-similar-star-${starIndex}`}
-                          className={`w-3.5 h-3.5 ${starIndex < item.rating ? 'fill-current' : 'text-white/30'}`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs text-gray-300">({item.reviews})</span>
-                  </div>
                 </div>
               </Link>
             </article>
