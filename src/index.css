@@ -182,6 +182,28 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  .gold-price-ticker-track {
+    display: flex;
+    width: max-content;
+    min-width: 100%;
+    will-change: transform;
+    animation: gold-price-ticker-scroll 34s linear infinite;
+  }
+
+  .gold-price-ticker-content {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .gold-price-ticker-item {
+    display: inline-flex;
+    margin-right: 5cm;
+  }
+
+  .gold-price-ticker-label {
+    font-weight: 600;
+  }
 }
 
 @keyframes hero-breathe {
@@ -190,6 +212,15 @@
   }
   to {
     transform: scale(1.07) translate3d(-1.2%, -0.6%, 0);
+  }
+}
+
+@keyframes gold-price-ticker-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
   }
 }
 
@@ -212,6 +243,10 @@
 
   .hero-video {
     transition: none !important;
+  }
+
+  .gold-price-ticker-track {
+    animation: none;
   }
 }
 

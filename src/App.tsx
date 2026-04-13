@@ -25,7 +25,14 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { categories as localCatalogCategories, products } from '@/data/catalog';
 import { collections as localLandingCollections } from '@/data/collections';
 import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
-import { fetchAllCategories, fetchAllCollections, type ShopCategory, type ShopCollection } from '@/lib/shop-api';
+import {
+  fetchAllCategories,
+  fetchAllCollections,
+  fetchMetalPriceTicker,
+  type ShopCategory,
+  type ShopCollection,
+  type ShopMetalPriceTickerItem,
+} from '@/lib/shop-api';
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -55,6 +62,8 @@ const fallbackHomeCategories: HomeCategory[] = localCatalogCategories.map((categ
   image: category.image,
   count: category.count,
 }));
+
+const fallbackGoldPriceTicker: ShopMetalPriceTickerItem[] = [];
 
 function mapShopCategoryToHomeCategory(category: ShopCategory): HomeCategory {
   const fallbackMatch = fallbackHomeCategories.find((item) => item.slug === category.slug);
@@ -88,6 +97,7 @@ function App() {
   const [hoveredCollection, setHoveredCollection] = useState<string | null>(null);
   const [landingCollections, setLandingCollections] = useState<ShopCollection[]>(fallbackLandingCollections);
   const [landingCategories, setLandingCategories] = useState<HomeCategory[]>(fallbackHomeCategories);
+  const [goldPriceTicker, setGoldPriceTicker] = useState<ShopMetalPriceTickerItem[]>(fallbackGoldPriceTicker);
   const [shouldPlayHeroVideo] = useState(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -239,9 +249,10 @@ function App() {
     let isMounted = true;
 
     const loadHomeContent = async () => {
-      const [collectionsResult, categoriesResult] = await Promise.allSettled([
+      const [collectionsResult, categoriesResult, goldPricesResult] = await Promise.allSettled([
         fetchAllCollections(),
         fetchAllCategories(),
+        fetchMetalPriceTicker(),
       ]);
 
       if (!isMounted) {
@@ -260,6 +271,12 @@ function App() {
       } else {
         setLandingCategories(fallbackHomeCategories);
         toast.error('Unable to load categories from Supabase. Showing local categories.');
+      }
+
+      if (goldPricesResult.status === 'fulfilled' && goldPricesResult.value.length > 0) {
+        setGoldPriceTicker(goldPricesResult.value);
+      } else {
+        setGoldPriceTicker(fallbackGoldPriceTicker);
       }
     };
 
@@ -309,7 +326,7 @@ function App() {
       return;
     }
 
-    const navbarOffset = 88;
+    const navbarOffset = hasGoldPriceTicker ? 120 : 88;
     const top = section.getBoundingClientRect().top + window.scrollY - navbarOffset;
     window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
   };
@@ -368,6 +385,25 @@ function App() {
     return [...prioritized, ...remaining];
   }, [landingCollections]);
 
+  const goldPriceTickerItems = useMemo(() => {
+    if (goldPriceTicker.length === 0) {
+      return [] as string[];
+    }
+
+    const formatter = new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    });
+
+    return goldPriceTicker.map((item) => {
+        const value = formatter.format(item.price);
+        return `${item.metal}: ${value} / ${item.unit}`;
+      });
+  }, [goldPriceTicker]);
+
+  const hasGoldPriceTicker = goldPriceTickerItems.length > 0;
+
   const shouldScrollCollections = isMobile || landingCollections.length > 3;
   const shouldScrollCategories = isMobile || landingCategories.length > 4;
 
@@ -375,6 +411,28 @@ function App() {
     <div className="min-h-screen bg-charcoal text-white">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-charcoal/90 backdrop-blur-md border-b border-white/5">
+        {hasGoldPriceTicker && (
+          <div className="border-b border-gold/30 bg-charcoal-light/80 overflow-hidden">
+            <div className="gold-price-ticker-track py-1.5">
+              <div className="gold-price-ticker-content text-[11px] sm:text-xs tracking-[0.14em] uppercase text-gold/95 px-4">
+                {/* <span className="gold-price-ticker-item gold-price-ticker-label">Live Metal Prices</span> */}
+                {goldPriceTickerItems.map((item, index) => (
+                  <span key={`ticker-primary-${index}`} className="gold-price-ticker-item">
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <div className="gold-price-ticker-content text-[11px] sm:text-xs tracking-[0.14em] uppercase text-gold/95 px-4" aria-hidden="true">
+                {/* <span className="gold-price-ticker-item gold-price-ticker-label">Live Metal Prices</span> */}
+                {goldPriceTickerItems.map((item, index) => (
+                  <span key={`ticker-duplicate-${index}`} className="gold-price-ticker-item">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
         <div className="section-padding">
           <div className="flex items-center justify-between h-20">
             {/* Logo */}

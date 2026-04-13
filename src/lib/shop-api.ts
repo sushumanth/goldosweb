@@ -144,6 +144,13 @@ export type ShopProductDetail = {
   unavailableRingSizes: string[];
 };
 
+export type ShopMetalPriceTickerItem = {
+  metal: string;
+  unit: string;
+  price: number;
+  priceDate: string;
+};
+
 const fallbackImage = '/collection-1.jpg';
 const collectionFallbackImages = [
   '/collection-1.jpg',
@@ -253,6 +260,48 @@ function getDisplayPrice(row: Pick<ProductRow, 'base_price' | 'original_price'>)
   }
 
   return toPriceNumber(row.base_price);
+}
+
+export async function fetchMetalPriceTicker(): Promise<ShopMetalPriceTickerItem[]> {
+  type MetalPriceRow = {
+    price: number;
+    price_date: string;
+    created_at: string | null;
+    metal: { id: string; name: string; unit: string } | Array<{ id: string; name: string; unit: string }> | null;
+  };
+
+  const { data, error } = await supabase
+    .from('metal_prices')
+    .select('price, price_date, created_at, metal:metals!metal_prices_metal_id_fkey(id, name, unit)')
+    .order('price_date', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(500);
+
+  if (error) {
+    throw error;
+  }
+
+  const latestByMetal = new Map<string, ShopMetalPriceTickerItem>();
+
+  ((data ?? []) as MetalPriceRow[]).forEach((row) => {
+    const metalRaw = Array.isArray(row.metal) ? row.metal[0] : row.metal;
+    if (!metalRaw?.id || !metalRaw.name) {
+      return;
+    }
+
+    if (latestByMetal.has(metalRaw.id)) {
+      return;
+    }
+
+    latestByMetal.set(metalRaw.id, {
+      metal: metalRaw.name,
+      unit: metalRaw.unit || 'unit',
+      price: toPriceNumber(row.price),
+      priceDate: row.price_date,
+    });
+  });
+
+  return Array.from(latestByMetal.values()).sort((a, b) => a.metal.localeCompare(b.metal));
 }
 
 function findLocalCollectionBySlug(slug: string): LocalCollection | null {
