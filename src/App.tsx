@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { toast } from 'sonner';
@@ -38,6 +38,8 @@ const fallbackLandingCollections: ShopCollection[] = localLandingCollections.map
   image: collection.image,
 }));
 
+const PRIORITY_COLLECTION_SLUGS = ['gold-classics', 'bridal-collection', 'diamond-essentials'] as const;
+
 type HomeCategory = {
   id: number;
   name: string;
@@ -67,8 +69,9 @@ function mapShopCategoryToHomeCategory(category: ShopCategory): HomeCategory {
 }
 
 function App() {
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { totalItems, addToCart } = useCart();
+  const { totalItems, addToCart, cartItems } = useCart();
   const [isNavOpen, setIsNavOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
@@ -344,6 +347,27 @@ function App() {
     return ranked.slice(0, 3);
   }, []);
 
+  const cartProductIds = useMemo(() => {
+    return new Set(cartItems.map((item) => item.productId));
+  }, [cartItems]);
+
+  const orderedCollections = useMemo(() => {
+    const prioritized: ShopCollection[] = [];
+    const usedIndexes = new Set<number>();
+
+    PRIORITY_COLLECTION_SLUGS.forEach((slug) => {
+      landingCollections.forEach((collection, index) => {
+        if (collection.slug === slug) {
+          prioritized.push(collection);
+          usedIndexes.add(index);
+        }
+      });
+    });
+
+    const remaining = landingCollections.filter((_, index) => !usedIndexes.has(index));
+    return [...prioritized, ...remaining];
+  }, [landingCollections]);
+
   const shouldScrollCollections = isMobile || landingCollections.length > 3;
   const shouldScrollCategories = isMobile || landingCategories.length > 4;
 
@@ -524,7 +548,7 @@ function App() {
           
           <div className={`lg:w-2/3 max-w-full ${shouldScrollCollections ? 'overflow-x-auto overscroll-x-contain scrollbar-hide pb-2' : ''}`}>
             <div className={shouldScrollCollections ? 'flex gap-3 sm:gap-6 min-w-max pr-1' : 'grid grid-cols-1 md:grid-cols-3 gap-6'}>
-              {landingCollections.map((collection) => (
+              {orderedCollections.map((collection) => (
                 <Link
                   key={`${collection.slug}-${collection.id}`}
                   to={`/collections/${collection.slug}`}
@@ -627,7 +651,7 @@ function App() {
                 </Link>
               ))}
 
-              {landingCollections.length === 0 && (
+              {orderedCollections.length === 0 && (
                 <div className={`${shouldScrollCollections ? 'w-[280px] shrink-0' : 'md:col-span-3'} border border-white/10 bg-charcoal-light p-6 text-gray-300`}>
                   Collections are not available right now.
                 </div>
@@ -781,10 +805,21 @@ function App() {
                       Quick View
                     </button>
                     <button
-                      onClick={() => addProductToCart(product)}
-                      className="w-full border border-gold text-gold hover:bg-gold hover:text-charcoal transition-colors text-sm"
+                      onClick={() => {
+                        if (cartProductIds.has(product.id)) {
+                          navigate('/cart');
+                          return;
+                        }
+
+                        addProductToCart(product);
+                      }}
+                      className={`w-full border border-gold transition-colors text-sm ${
+                        cartProductIds.has(product.id)
+                          ? 'bg-gold text-charcoal hover:bg-gold-light'
+                          : 'text-gold hover:bg-gold hover:text-charcoal'
+                      }`}
                     >
-                      Add Cart
+                      {cartProductIds.has(product.id) ? 'View Cart' : 'Add Cart'}
                     </button>
                   </div>
                 </div>

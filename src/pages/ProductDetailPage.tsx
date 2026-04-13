@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Heart, Share2 } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { getWishlistIds, toggleWishlistItem } from '../lib/shop-storage';
 import { useCart } from '../context/CartContext';
+import { applyShareMeta } from '@/lib/share-meta';
 import {
   fetchCollectionBySlug,
   fetchProductDetailById,
@@ -22,9 +23,10 @@ function formatCurrency(value: number) {
 
 function ProductDetailPage() {
   const params = useParams();
+  const navigate = useNavigate();
   const slug = params.slug ?? '';
   const productId = Number(params.productId);
-  const { addToCart } = useCart();
+  const { addToCart, cartItems } = useCart();
 
   const [collection, setCollection] = useState<ShopCollection | null>(null);
   const [product, setProduct] = useState<ShopProductDetail | null>(null);
@@ -86,6 +88,31 @@ function ProductDetailPage() {
   }, [slug, productId]);
 
   const calculatedPrice = product?.price ?? 0;
+
+  useEffect(() => {
+    if (!product) {
+      return;
+    }
+
+    const imageUrl = product.image
+      ? new URL(product.image, window.location.origin).toString()
+      : new URL('/featured-main.jpg', window.location.origin).toString();
+
+    applyShareMeta({
+      title: `${product.name} | Aurum & Gems`,
+      description: (product.description || `Explore ${product.name} from Aurum and Gems.`).slice(0, 180),
+      url: window.location.href,
+      image: imageUrl,
+    });
+  }, [product]);
+
+  const isProductInCart = useMemo(() => {
+    if (!product) {
+      return false;
+    }
+
+    return cartItems.some((item) => item.productId === product.id);
+  }, [cartItems, product]);
 
   const productInfoRows = useMemo(() => {
     if (!product) {
@@ -181,6 +208,11 @@ function ProductDetailPage() {
   }
 
   const handleAddToCart = () => {
+    if (isProductInCart) {
+      navigate('/cart');
+      return;
+    }
+
     addToCart({
       productId: product.id,
       name: product.name,
@@ -209,6 +241,112 @@ function ProductDetailPage() {
     }
   };
 
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    const imageUrl = product.image ? new URL(product.image, window.location.origin).toString() : '';
+    const textWithImage = imageUrl
+      ? `Check out this jewelry piece: ${product.name}\nImage: ${imageUrl}`
+      : `Check out this jewelry piece: ${product.name}`;
+
+    const shareData = {
+      title: product.name,
+      text: textWithImage,
+      url: shareUrl,
+    };
+
+    const fallbackMessage = [textWithImage, shareUrl]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      let productImageBlob: Blob | null = null;
+      if (imageUrl) {
+        try {
+          const response = await fetch(imageUrl);
+          if (response.ok) {
+            productImageBlob = await response.blob();
+          }
+        } catch {
+          // Continue with non-image fallback when image download fails.
+        }
+      }
+
+      if (navigator.share) {
+        let sharedWithImage = false;
+
+        if (productImageBlob) {
+          try {
+            const extensionFromType = productImageBlob.type.split('/')[1] || 'jpg';
+            const imageFile = new File([productImageBlob], `product-image.${extensionFromType}`, {
+              type: productImageBlob.type || 'image/jpeg',
+            });
+
+            const shareDataWithFile = { ...shareData, files: [imageFile] } as ShareData;
+            const canShareFile = (navigator as Navigator & { canShare?: (shareData?: ShareData) => boolean }).canShare;
+
+            if (canShareFile?.(shareDataWithFile)) {
+              await navigator.share(shareDataWithFile);
+              sharedWithImage = true;
+            }
+          } catch {
+            // Fallback to regular text/url share below.
+          }
+        }
+
+        if (!sharedWithImage) {
+          await navigator.share(shareData);
+        }
+
+        toast.success(sharedWithImage ? 'Product image and link shared.' : 'Product link shared.');
+        return;
+      }
+
+      if (productImageBlob && navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+        try {
+          const mimeType = productImageBlob.type || 'image/jpeg';
+          const clipboardPayload: Record<string, Blob> = {
+            [mimeType]: productImageBlob,
+            'text/plain': new Blob([fallbackMessage], { type: 'text/plain' }),
+          };
+
+          await navigator.clipboard.write([new ClipboardItem(clipboardPayload)]);
+          toast.success('Image copied. Paste in chat to send image with link.');
+          return;
+        } catch {
+          // Continue with text-only clipboard fallback.
+        }
+      }
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fallbackMessage);
+        toast.success(imageUrl ? 'Product link and image URL copied.' : 'Product link copied to clipboard.');
+        return;
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = fallbackMessage;
+      textarea.setAttribute('readonly', 'true');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      if (copied) {
+        toast.success(imageUrl ? 'Product link and image URL copied.' : 'Product link copied to clipboard.');
+      } else {
+        toast.error('Unable to share right now.');
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+
+      toast.error('Unable to share right now.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-charcoal text-white">
       <section className="section-padding py-5 border-b border-white/10">
@@ -220,7 +358,11 @@ function ProductDetailPage() {
             <ArrowLeft className="w-4 h-4" />
             Back to Collection
           </Link>
-          <button type="button" className="inline-flex items-center gap-2 text-gray-300 hover:text-gold transition-colors">
+          <button
+            type="button"
+            onClick={handleShare}
+            className="inline-flex items-center gap-2 text-gray-300 hover:text-gold transition-colors"
+          >
             <Share2 className="w-4 h-4" />
             Share
           </button>
@@ -286,7 +428,7 @@ function ProductDetailPage() {
                 onClick={handleAddToCart}
                 className="w-full h-12 bg-gold text-charcoal font-semibold tracking-wide hover:bg-gold-light transition-colors"
               >
-                ADD TO CART
+                {isProductInCart ? 'VIEW CART' : 'ADD TO CART'}
               </button>
 
               {cartMessage && (

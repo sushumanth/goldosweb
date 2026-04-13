@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronDown, Heart, X } from 'lucide-react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getWishlistIds, toggleWishlistItem } from '../lib/shop-storage';
 import { useCart } from '../context/CartContext';
@@ -65,10 +65,11 @@ function inferAudience(id: number): Audience {
 
 function CollectionPage() {
   const { slug = '' } = useParams();
+  const navigate = useNavigate();
   const [collection, setCollection] = useState<ShopCollection | null>(null);
   const [collectionProducts, setCollectionProducts] = useState<ShopCollectionProduct[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { addToCart } = useCart();
+  const { addToCart, cartItems } = useCart();
   const audienceOptions: Audience[] = ['Women', 'Men', 'Unisex'];
   const [selectedAudience, setSelectedAudience] = useState<Audience | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
@@ -169,6 +170,10 @@ function CollectionPage() {
     toggleState.onSale ||
     toggleState.engravable ||
     (Object.keys(selectedFilters) as FilterKey[]).some((key) => selectedFilters[key].length > 0);
+
+  const cartProductIds = useMemo(() => {
+    return new Set(cartItems.map((item) => item.productId));
+  }, [cartItems]);
 
   if (!isLoading && !collection) {
     return (
@@ -398,7 +403,10 @@ function CollectionPage() {
 
         {!isLoading && (
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-          {filteredProducts.map((product) => (
+          {filteredProducts.map((product) => {
+            const isInCart = cartProductIds.has(product.id);
+
+            return (
             <article
               key={product.id}
               className="group bg-white/[0.04] border border-white/10 rounded-sm overflow-hidden hover:border-gold/50 transition-colors"
@@ -451,16 +459,25 @@ function CollectionPage() {
                     onClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
+                      if (isInCart) {
+                        navigate('/cart');
+                        return;
+                      }
                       addCollectionProductToCart(product);
                     }}
-                    className="mt-3 w-full h-9 border border-gold text-gold hover:bg-gold hover:text-charcoal transition-colors text-sm"
+                    className={`mt-3 w-full h-9 border border-gold transition-colors text-sm ${
+                      isInCart
+                        ? 'bg-gold text-charcoal hover:bg-gold-light'
+                        : 'text-gold hover:bg-gold hover:text-charcoal'
+                    }`}
                   >
-                    Add to Cart
+                    {isInCart ? 'View Cart' : 'Add to Cart'}
                   </button>
                 </div>
               </Link>
             </article>
-          ))}
+            );
+          })}
         </div>
         )}
 
