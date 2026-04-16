@@ -1,3 +1,5 @@
+import { getTenantStorageNamespace } from '@/lib/tenant';
+
 export type CartItem = {
   id: number;
   name: string;
@@ -16,6 +18,10 @@ export type CartItem = {
 const WISHLIST_KEY = 'ag_wishlist';
 const CART_KEY = 'ag_cart';
 const SHOP_STORAGE_EVENT = 'ag-shop-storage-updated';
+
+function scopedStorageKey(baseKey: string) {
+  return `${baseKey}:${getTenantStorageNamespace()}`;
+}
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -54,7 +60,7 @@ function writeJSON<T>(key: string, value: T) {
 }
 
 export function getWishlistIds() {
-  return readJSON<number[]>(WISHLIST_KEY, []);
+  return readJSON<number[]>(scopedStorageKey(WISHLIST_KEY), []);
 }
 
 export function isInWishlist(id: number) {
@@ -67,24 +73,24 @@ export function toggleWishlistItem(id: number) {
     ? wishlist.filter((itemId) => itemId !== id)
     : [...wishlist, id];
 
-  writeJSON(WISHLIST_KEY, updated);
+  writeJSON(scopedStorageKey(WISHLIST_KEY), updated);
   return updated;
 }
 
 export function removeWishlistItem(id: number) {
   const wishlist = getWishlistIds();
   const updated = wishlist.filter((itemId) => itemId !== id);
-  writeJSON(WISHLIST_KEY, updated);
+  writeJSON(scopedStorageKey(WISHLIST_KEY), updated);
   return updated;
 }
 
 export function clearWishlist() {
-  writeJSON(WISHLIST_KEY, []);
+  writeJSON(scopedStorageKey(WISHLIST_KEY), []);
   return [] as number[];
 }
 
 export function getCartItems() {
-  return readJSON<CartItem[]>(CART_KEY, []);
+  return readJSON<CartItem[]>(scopedStorageKey(CART_KEY), []);
 }
 
 export function getCartCount() {
@@ -109,12 +115,12 @@ export function addToCart(item: Omit<CartItem, 'quantity'> & { quantity?: number
       ...updated[existingIndex],
       quantity: updated[existingIndex].quantity + nextQuantity,
     };
-    writeJSON(CART_KEY, updated);
+    writeJSON(scopedStorageKey(CART_KEY), updated);
     return updated;
   }
 
   const updated = [...cart, newItem];
-  writeJSON(CART_KEY, updated);
+  writeJSON(scopedStorageKey(CART_KEY), updated);
   return updated;
 }
 
@@ -125,7 +131,7 @@ export function removeCartItemByIndex(index: number) {
   }
 
   const updated = cart.filter((_, itemIndex) => itemIndex !== index);
-  writeJSON(CART_KEY, updated);
+  writeJSON(scopedStorageKey(CART_KEY), updated);
   return updated;
 }
 
@@ -142,12 +148,12 @@ export function setCartItemQuantityByIndex(index: number, quantity: number) {
     quantity: nextQuantity,
   };
 
-  writeJSON(CART_KEY, updated);
+  writeJSON(scopedStorageKey(CART_KEY), updated);
   return updated;
 }
 
 export function clearCart() {
-  writeJSON(CART_KEY, []);
+  writeJSON(scopedStorageKey(CART_KEY), []);
   return [] as CartItem[];
 }
 

@@ -2,6 +2,24 @@
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
+## Multi-tenant setup
+
+This app resolves the active tenant from the current domain and filters all Supabase queries by `tenant_id`.
+
+1. Ensure each tenant has a `website_link` value in the `tenants` table (for example `goldosweb.com` or `https://goldosweb.com`).
+2. Run [MULTI_TENANT_MIGRATION.sql](MULTI_TENANT_MIGRATION.sql) to normalize tenant website-link columns/constraints.
+3. Optional local/dev overrides:
+
+```env
+VITE_TENANT_WEBSITE=http://localhost:5173
+VITE_TENANT_SLUG=your-tenant-slug
+VITE_TENANT_STORAGE_KEY=local-dev-tenant
+```
+
+`VITE_TENANT_WEBSITE` and `VITE_TENANT_SLUG` help resolve a tenant when hostname mapping is not available in local development.
+
+For testing, if no host/slug match is found, the app falls back to the next tenant row (second row ordered by `created_at` ascending). If there is only one tenant, it uses that tenant.
+
 Currently, two official plugins are available:
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh

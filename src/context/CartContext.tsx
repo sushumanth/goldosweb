@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { getTenantStorageNamespace } from '@/lib/tenant';
 
 export type CartSelection = {
   metal: string;
@@ -38,6 +39,10 @@ type CartContextValue = {
 
 const STORAGE_KEY = 'aurum-cart-v1';
 
+function getScopedStorageKey() {
+  return `${STORAGE_KEY}:${getTenantStorageNamespace()}`;
+}
+
 const CartContext = createContext<CartContextValue | null>(null);
 
 const createItemKey = (payload: AddToCartPayload) => {
@@ -52,7 +57,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const raw = window.localStorage.getItem(getScopedStorageKey());
       if (!raw) {
         return [];
       }
@@ -65,7 +70,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cartItems));
+    window.localStorage.setItem(getScopedStorageKey(), JSON.stringify(cartItems));
   }, [cartItems]);
 
   const addToCart = (payload: AddToCartPayload) => {

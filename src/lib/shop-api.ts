@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getCurrentTenantId } from '@/lib/tenant';
 import { collections as localCollections, type Collection as LocalCollection } from '@/data/collections';
 
 type CategoryRow = {
@@ -263,6 +264,8 @@ function getDisplayPrice(row: Pick<ProductRow, 'base_price' | 'original_price'>)
 }
 
 export async function fetchMetalPriceTicker(): Promise<ShopMetalPriceTickerItem[]> {
+  const tenantId = await getCurrentTenantId();
+
   type MetalPriceRow = {
     price: number;
     price_date: string;
@@ -273,6 +276,7 @@ export async function fetchMetalPriceTicker(): Promise<ShopMetalPriceTickerItem[
   const { data, error } = await supabase
     .from('metal_prices')
     .select('price, price_date, created_at, metal:metals!metal_prices_metal_id_fkey(id, name, unit)')
+    .eq('tenant_id', tenantId)
     .order('price_date', { ascending: false })
     .order('created_at', { ascending: false, nullsFirst: false })
     .limit(500);
@@ -385,9 +389,12 @@ function normalizeCollection(row: CollectionRow): ShopCollection {
 }
 
 export async function fetchAllCollections(): Promise<ShopCollection[]> {
+  const tenantId = await getCurrentTenantId();
+
   const { data, error } = await supabase
     .from('collections')
     .select('id, name, slug, subtitle, description, image_url, sort_order, created_at')
+    .eq('tenant_id', tenantId)
     .or('is_active.is.null,is_active.eq.true')
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false });
@@ -427,7 +434,7 @@ function mapProductCard(
   };
 }
 
-async function getCategoriesByIds(ids: number[]): Promise<Map<number, ShopCategory>> {
+async function getCategoriesByIds(ids: number[], tenantId: string): Promise<Map<number, ShopCategory>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -435,6 +442,7 @@ async function getCategoriesByIds(ids: number[]): Promise<Map<number, ShopCatego
   const { data, error } = await supabase
     .from('categories')
     .select('id, name, slug')
+    .eq('tenant_id', tenantId)
     .in('id', ids);
 
   if (error) {
@@ -453,7 +461,7 @@ async function getCategoriesByIds(ids: number[]): Promise<Map<number, ShopCatego
   return map;
 }
 
-async function getCollectionsByIds(ids: number[]): Promise<Map<number, ShopCollection>> {
+async function getCollectionsByIds(ids: number[], tenantId: string): Promise<Map<number, ShopCollection>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -461,6 +469,7 @@ async function getCollectionsByIds(ids: number[]): Promise<Map<number, ShopColle
   const { data, error } = await supabase
     .from('collections')
     .select('id, name, slug, subtitle, description, image_url')
+    .eq('tenant_id', tenantId)
     .in('id', ids);
 
   if (error) {
@@ -475,7 +484,7 @@ async function getCollectionsByIds(ids: number[]): Promise<Map<number, ShopColle
   return map;
 }
 
-async function getProductCountsByCategoryIds(ids: number[]): Promise<Map<number, number>> {
+async function getProductCountsByCategoryIds(ids: number[], tenantId: string): Promise<Map<number, number>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -483,6 +492,7 @@ async function getProductCountsByCategoryIds(ids: number[]): Promise<Map<number,
   const { data, error } = await supabase
     .from('products')
     .select('category_id')
+    .eq('tenant_id', tenantId)
     .in('category_id', ids)
     .eq('is_active', true);
 
@@ -498,7 +508,7 @@ async function getProductCountsByCategoryIds(ids: number[]): Promise<Map<number,
   return map;
 }
 
-async function getPrimaryMetalsByProductIds(ids: number[]): Promise<Map<number, string>> {
+async function getPrimaryMetalsByProductIds(ids: number[], tenantId: string): Promise<Map<number, string>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -506,6 +516,7 @@ async function getPrimaryMetalsByProductIds(ids: number[]): Promise<Map<number, 
   const { data, error } = await supabase
     .from('product_metals')
     .select('product_id, metal_type')
+    .eq('tenant_id', tenantId)
     .in('product_id', ids)
     .order('created_at', { ascending: true });
 
@@ -523,7 +534,7 @@ async function getPrimaryMetalsByProductIds(ids: number[]): Promise<Map<number, 
   return map;
 }
 
-async function getReviewCountsByProductIds(ids: number[]): Promise<Map<number, number>> {
+async function getReviewCountsByProductIds(ids: number[], tenantId: string): Promise<Map<number, number>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -531,6 +542,7 @@ async function getReviewCountsByProductIds(ids: number[]): Promise<Map<number, n
   const { data, error } = await supabase
     .from('reviews')
     .select('product_id')
+    .eq('tenant_id', tenantId)
     .in('product_id', ids)
     .eq('is_approved', true);
 
@@ -546,7 +558,7 @@ async function getReviewCountsByProductIds(ids: number[]): Promise<Map<number, n
   return counts;
 }
 
-async function getProductImageSetsByProductIds(ids: number[]): Promise<Map<number, string[]>> {
+async function getProductImageSetsByProductIds(ids: number[], tenantId: string): Promise<Map<number, string[]>> {
   if (ids.length === 0) {
     return new Map();
   }
@@ -554,6 +566,7 @@ async function getProductImageSetsByProductIds(ids: number[]): Promise<Map<numbe
   const { data, error } = await supabase
     .from('product_images')
     .select('product_id, image_url, sort_order')
+    .eq('tenant_id', tenantId)
     .in('product_id', ids)
     .order('product_id', { ascending: true })
     .order('sort_order', { ascending: true });
@@ -580,17 +593,17 @@ async function getProductImageSetsByProductIds(ids: number[]): Promise<Map<numbe
   return map;
 }
 
-async function getProductCards(rows: ProductRow[]): Promise<ShopProductCard[]> {
+async function getProductCards(rows: ProductRow[], tenantId: string): Promise<ShopProductCard[]> {
   const productIds = rows.map((row) => row.id);
   const categoryIds = Array.from(new Set(rows.map((row) => row.category_id)));
   const collectionIds = Array.from(new Set(rows.map((row) => row.collection_id).filter((id): id is number => Boolean(id))));
 
   const [categoriesMap, collectionsMap, metalsMap, reviewCountsMap, productImagesMap] = await Promise.all([
-    getCategoriesByIds(categoryIds),
-    getCollectionsByIds(collectionIds),
-    getPrimaryMetalsByProductIds(productIds),
-    getReviewCountsByProductIds(productIds),
-    getProductImageSetsByProductIds(productIds),
+    getCategoriesByIds(categoryIds, tenantId),
+    getCollectionsByIds(collectionIds, tenantId),
+    getPrimaryMetalsByProductIds(productIds, tenantId),
+    getReviewCountsByProductIds(productIds, tenantId),
+    getProductImageSetsByProductIds(productIds, tenantId),
   ]);
 
   return rows.map((row) => {
@@ -610,9 +623,12 @@ async function getProductCards(rows: ProductRow[]): Promise<ShopProductCard[]> {
 }
 
 export async function fetchAllCategories(): Promise<ShopCategory[]> {
+  const tenantId = await getCurrentTenantId();
+
   const { data, error } = await supabase
     .from('categories')
     .select('id, name, slug, description, image_url, sort_order, created_at')
+    .eq('tenant_id', tenantId)
     .or('is_active.is.null,is_active.eq.true')
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false });
@@ -622,7 +638,7 @@ export async function fetchAllCategories(): Promise<ShopCategory[]> {
   }
 
   const rows = (data ?? []) as CategoryRow[];
-  const countsByCategoryId = await getProductCountsByCategoryIds(rows.map((row) => row.id));
+  const countsByCategoryId = await getProductCountsByCategoryIds(rows.map((row) => row.id), tenantId);
 
   return rows.map((row) => ({
     id: row.id,
@@ -635,9 +651,12 @@ export async function fetchAllCategories(): Promise<ShopCategory[]> {
 }
 
 export async function fetchCategoryBySlug(slug: string): Promise<ShopCategory | null> {
+  const tenantId = await getCurrentTenantId();
+
   const { data, error } = await supabase
     .from('categories')
     .select('id, name, slug, description, image_url')
+    .eq('tenant_id', tenantId)
     .eq('slug', slug)
     .or('is_active.is.null,is_active.eq.true')
     .maybeSingle();
@@ -651,7 +670,7 @@ export async function fetchCategoryBySlug(slug: string): Promise<ShopCategory | 
   }
 
   const category = data as CategoryRow;
-  const countMap = await getProductCountsByCategoryIds([category.id]);
+  const countMap = await getProductCountsByCategoryIds([category.id], tenantId);
 
   return {
     id: category.id,
@@ -664,6 +683,7 @@ export async function fetchCategoryBySlug(slug: string): Promise<ShopCategory | 
 }
 
 export async function fetchProductsByCategorySlug(slug: string): Promise<{ category: ShopCategory | null; products: ShopProductCard[] }> {
+  const tenantId = await getCurrentTenantId();
   const category = await fetchCategoryBySlug(slug);
   if (!category) {
     return {
@@ -675,6 +695,7 @@ export async function fetchProductsByCategorySlug(slug: string): Promise<{ categ
   const { data, error } = await supabase
     .from('products')
     .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
     .eq('category_id', category.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
@@ -684,7 +705,7 @@ export async function fetchProductsByCategorySlug(slug: string): Promise<{ categ
   }
 
   const productRows = (data ?? []) as ProductRow[];
-  const products = await getProductCards(productRows);
+  const products = await getProductCards(productRows, tenantId);
 
   return {
     category,
@@ -693,6 +714,7 @@ export async function fetchProductsByCategorySlug(slug: string): Promise<{ categ
 }
 
 export async function fetchCollectionBySlug(slug: string): Promise<ShopCollection | null> {
+  const tenantId = await getCurrentTenantId();
   const normalizedSlug = normalizeSlug(slug);
   const slugVariants = Array.from(
     new Set([
@@ -706,6 +728,7 @@ export async function fetchCollectionBySlug(slug: string): Promise<ShopCollectio
   const { data, error } = await supabase
     .from('collections')
     .select('id, name, slug, subtitle, description, image_url')
+    .eq('tenant_id', tenantId)
     .in('slug', slugVariants)
     .or('is_active.is.null,is_active.eq.true');
 
@@ -733,6 +756,7 @@ export async function fetchCollectionBySlug(slug: string): Promise<ShopCollectio
 }
 
 export async function fetchProductsByCollectionSlug(slug: string): Promise<{ collection: ShopCollection | null; products: ShopCollectionProduct[] }> {
+  const tenantId = await getCurrentTenantId();
   const collection = await fetchCollectionBySlug(slug);
   if (!collection) {
     return {
@@ -751,6 +775,7 @@ export async function fetchProductsByCollectionSlug(slug: string): Promise<{ col
   const { data, error } = await supabase
     .from('products')
     .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
     .eq('collection_id', collection.id)
     .eq('is_active', true)
     .order('created_at', { ascending: false });
@@ -763,8 +788,8 @@ export async function fetchProductsByCollectionSlug(slug: string): Promise<{ col
 
   const productIds = rows.map((row) => row.id);
   const [reviewCounts, productImagesMap] = await Promise.all([
-    getReviewCountsByProductIds(productIds),
-    getProductImageSetsByProductIds(productIds),
+    getReviewCountsByProductIds(productIds, tenantId),
+    getProductImageSetsByProductIds(productIds, tenantId),
   ]);
 
   const mapped = rows.map((row) => {
@@ -809,9 +834,12 @@ export async function fetchProductsByCollectionSlug(slug: string): Promise<{ col
 }
 
 export async function fetchProductDetailById(productId: number): Promise<ShopProductDetail | null> {
+  const tenantId = await getCurrentTenantId();
+
   const { data, error } = await supabase
     .from('products')
     .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
     .eq('id', productId)
     .eq('is_active', true)
     .maybeSingle();
@@ -827,29 +855,34 @@ export async function fetchProductDetailById(productId: number): Promise<ShopPro
   const row = data as ProductRow;
 
   const [categoriesMap, collectionsMap, imagesRes, metalsRes, sizesRes, optionsRes, reviewsRes] = await Promise.all([
-    getCategoriesByIds([row.category_id]),
-    row.collection_id ? getCollectionsByIds([row.collection_id]) : Promise.resolve(new Map<number, ShopCollection>()),
+    getCategoriesByIds([row.category_id], tenantId),
+    row.collection_id ? getCollectionsByIds([row.collection_id], tenantId) : Promise.resolve(new Map<number, ShopCollection>()),
     supabase
       .from('product_images')
       .select('image_url, sort_order')
+      .eq('tenant_id', tenantId)
       .eq('product_id', row.id)
       .order('sort_order', { ascending: true }),
     supabase
       .from('product_metals')
       .select('metal_type')
+      .eq('tenant_id', tenantId)
       .eq('product_id', row.id),
     supabase
       .from('ring_sizes')
       .select('size_label, is_available')
+      .eq('tenant_id', tenantId)
       .eq('product_id', row.id),
     supabase
       .from('product_options')
       .select('option_type, option_value')
+      .eq('tenant_id', tenantId)
       .eq('product_id', row.id)
       .in('option_type', ['carat', 'diamond_type', 'metal', 'size']),
     supabase
       .from('reviews')
       .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
       .eq('product_id', row.id)
       .eq('is_approved', true),
   ]);
@@ -952,6 +985,8 @@ export async function fetchProductDetailById(productId: number): Promise<ShopPro
 }
 
 export async function searchProducts(query: string, limit = 24): Promise<ShopProductCard[]> {
+  const tenantId = await getCurrentTenantId();
+
   const normalized = normalizeSearchTerm(query);
   if (normalized.length < 2) {
     return [];
@@ -962,6 +997,7 @@ export async function searchProducts(query: string, limit = 24): Promise<ShopPro
   const { data, error } = await supabase
     .from('products')
     .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
     .eq('is_active', true)
     .or(`name.ilike.${pattern},slug.ilike.${pattern},sku.ilike.${pattern},description.ilike.${pattern}`)
     .order('is_best_seller', { ascending: false })
@@ -973,10 +1009,12 @@ export async function searchProducts(query: string, limit = 24): Promise<ShopPro
   }
 
   const rows = (data ?? []) as ProductRow[];
-  return getProductCards(rows);
+  return getProductCards(rows, tenantId);
 }
 
 export async function fetchProductsByIds(productIds: number[]): Promise<ShopProductCard[]> {
+  const tenantId = await getCurrentTenantId();
+
   if (productIds.length === 0) {
     return [];
   }
@@ -986,6 +1024,7 @@ export async function fetchProductsByIds(productIds: number[]): Promise<ShopProd
   const { data, error } = await supabase
     .from('products')
     .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
     .in('id', uniqueIds)
     .eq('is_active', true);
 
@@ -994,7 +1033,7 @@ export async function fetchProductsByIds(productIds: number[]): Promise<ShopProd
   }
 
   const rows = (data ?? []) as ProductRow[];
-  const cards = await getProductCards(rows);
+  const cards = await getProductCards(rows, tenantId);
   const byId = new Map(cards.map((item) => [item.id, item]));
 
   return uniqueIds
