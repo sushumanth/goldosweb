@@ -19,7 +19,6 @@ function formatPrice(value: number) {
 type InquiryItem = {
   productId: number;
   name: string;
-  image?: string;
   unitPrice: number;
   quantity: number;
   selection: {
