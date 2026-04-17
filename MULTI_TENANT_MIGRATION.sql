@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS public.tenants (
   slug varchar NOT NULL UNIQUE,
   owner_id uuid REFERENCES auth.users(id),
   created_at timestamp without time zone DEFAULT now(),
-  website_link text
+  website_link text,
+  phone_num1 varchar(20),
+  phone_num2 varchar(20)
 );
 
 -- Compatibility: if a legacy column with a space exists, rename it.
@@ -36,6 +38,10 @@ $$;
 
 ALTER TABLE public.tenants
   ADD COLUMN IF NOT EXISTS website_link text;
+
+ALTER TABLE public.tenants
+  ADD COLUMN IF NOT EXISTS phone_num1 varchar(20),
+  ADD COLUMN IF NOT EXISTS phone_num2 varchar(20);
 
 ALTER TABLE public.tenants
   DROP CONSTRAINT IF EXISTS "tenants_website link_key";

@@ -1,11 +1,12 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, MessageCircle, Minus, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { collections } from '@/data/collections';
-
-const WHATSAPP_NUMBER = '+918328636040';
+import { buildTenantWhatsappHref } from '@/lib/whatsapp';
 
 function formatPrice(value: number) {
   return new Intl.NumberFormat('en-IN', {
@@ -26,7 +27,7 @@ type InquiryItem = {
   };
 };
 
-function buildCartInquiryHref(items: InquiryItem[], subtotal: number, shipping: number, total: number) {
+function buildCartInquiryMessage(items: InquiryItem[], subtotal: number, shipping: number, total: number) {
   const lines = [
     'Hi, I would like to inquire about these products:',
     '',
@@ -48,15 +49,42 @@ function buildCartInquiryHref(items: InquiryItem[], subtotal: number, shipping: 
     `Estimated Total: ${formatPrice(total)}`,
   ];
 
-  return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines.join('\n'))}`;
+  return lines.join('\n');
 }
 
 function CartPage() {
   const { cartItems, totalItems, subtotal, updateQuantity, removeFromCart, clearCart } = useCart();
+  const [isOpeningInquiry, setIsOpeningInquiry] = useState(false);
 
   const shipping = subtotal > 150000 ? 0 : totalItems > 0 ? 1200 : 0;
   const estimatedTotal = subtotal + shipping;
-  const inquiryHref = buildCartInquiryHref(cartItems, subtotal, shipping, estimatedTotal);
+
+  const handleOpenInquiry = async () => {
+    if (isOpeningInquiry) {
+      return;
+    }
+
+    setIsOpeningInquiry(true);
+
+    try {
+      const message = buildCartInquiryMessage(cartItems, subtotal, shipping, estimatedTotal);
+      const inquiryHref = await buildTenantWhatsappHref(message);
+
+      if (!inquiryHref) {
+        toast.error('No WhatsApp number is configured for this tenant.');
+        return;
+      }
+
+      const openedWindow = window.open(inquiryHref, '_blank', 'noopener,noreferrer');
+      if (!openedWindow) {
+        window.location.href = inquiryHref;
+      }
+    } catch {
+      toast.error('Unable to open WhatsApp inquiry right now.');
+    } finally {
+      setIsOpeningInquiry(false);
+    }
+  };
 
   const getProductHref = (productId: number) => {
     const collection = collections.find((item) =>
@@ -185,11 +213,16 @@ function CartPage() {
               </div>
             </div>
 
-            <Button asChild className="w-full mt-6 h-12 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
-              <a href={inquiryHref} target="_blank" rel="noopener noreferrer">
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Inquiry the Shop
-              </a>
+            <Button
+              type="button"
+              onClick={() => {
+                void handleOpenInquiry();
+              }}
+              disabled={isOpeningInquiry}
+              className="w-full mt-6 h-12 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl"
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              {isOpeningInquiry ? 'Opening WhatsApp...' : 'Inquiry the Shop'}
             </Button>
             <p className="text-xs text-gray-500 mt-3">
               Send your cart details directly on WhatsApp for a quick response.
@@ -205,10 +238,15 @@ function CartPage() {
               <p className="text-xs text-gray-400">{totalItems} items</p>
               <p className="text-gold font-semibold">{formatPrice(estimatedTotal)}</p>
             </div>
-            <Button asChild className="h-11 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl">
-              <a href={inquiryHref} target="_blank" rel="noopener noreferrer">
-                Inquiry Shop
-              </a>
+            <Button
+              type="button"
+              onClick={() => {
+                void handleOpenInquiry();
+              }}
+              disabled={isOpeningInquiry}
+              className="h-11 bg-gold text-charcoal font-semibold hover:bg-gold-light rounded-xl"
+            >
+              {isOpeningInquiry ? 'Opening...' : 'Inquiry Shop'}
             </Button>
           </div>
         </div>

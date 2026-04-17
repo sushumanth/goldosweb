@@ -7,6 +7,8 @@ export type TenantIdentity = {
   name: string | null;
   slug: string | null;
   websiteLink: string | null;
+  phoneNum1: string | null;
+  phoneNum2: string | null;
 };
 
 let tenantPromise: Promise<TenantIdentity> | null = null;
@@ -59,6 +61,8 @@ function mapTenant(row: TenantRow): TenantIdentity | null {
     name: asNonEmptyString(row.name),
     slug: asNonEmptyString(row.slug),
     websiteLink: getTenantWebsiteLink(row),
+    phoneNum1: asNonEmptyString(row.phone_num1),
+    phoneNum2: asNonEmptyString(row.phone_num2),
   };
 }
 

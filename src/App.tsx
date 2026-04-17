@@ -25,6 +25,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { categories as localCatalogCategories, products } from '@/data/catalog';
 import { collections as localLandingCollections } from '@/data/collections';
 import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
+import { buildTenantWhatsappHref } from '@/lib/whatsapp';
 import {
   fetchAllCategories,
   fetchAllCollections,
@@ -98,6 +99,7 @@ function App() {
   const [landingCollections, setLandingCollections] = useState<ShopCollection[]>(fallbackLandingCollections);
   const [landingCategories, setLandingCategories] = useState<HomeCategory[]>(fallbackHomeCategories);
   const [goldPriceTicker, setGoldPriceTicker] = useState<ShopMetalPriceTickerItem[]>(fallbackGoldPriceTicker);
+  const [isOpeningWhatsApp, setIsOpeningWhatsApp] = useState(false);
   const [shouldPlayHeroVideo] = useState(() => {
     if (typeof window === 'undefined') {
       return true;
@@ -116,6 +118,32 @@ function App() {
   const categoryRef = useRef<HTMLDivElement>(null);
   const productsRef = useRef<HTMLDivElement>(null);
   const trustRef = useRef<HTMLDivElement>(null);
+
+  const openWhatsAppInquiry = async (message: string) => {
+    if (isOpeningWhatsApp) {
+      return;
+    }
+
+    setIsOpeningWhatsApp(true);
+
+    try {
+      const href = await buildTenantWhatsappHref(message);
+
+      if (!href) {
+        toast.error('No WhatsApp number is configured for this tenant.');
+        return;
+      }
+
+      const openedWindow = window.open(href, '_blank', 'noopener,noreferrer');
+      if (!openedWindow) {
+        window.location.href = href;
+      }
+    } catch {
+      toast.error('Unable to open WhatsApp right now.');
+    } finally {
+      setIsOpeningWhatsApp(false);
+    }
+  };
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -997,15 +1025,16 @@ function App() {
               >
                 <img src="/intalogo.png" alt="Instagram" className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
               </a>
-              <a
-                href="https://wa.me/919876543210"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  void openWhatsAppInquiry('Hi, I am interested in your jewelry collection.');
+                }}
                 aria-label="WhatsApp"
                 className="w-12 h-12 border border-white/20 flex items-center justify-center hover:border-gold hover:text-gold transition-colors bg-white/5"
               >
                 <WhatsAppIcon className="w-5 h-5" />
-              </a>
+              </button>
             </div>
           </div>
           
@@ -1131,15 +1160,17 @@ function App() {
               Connect with us directly on WhatsApp for instant assistance and personalized recommendations.
             </p>
             <div className="space-y-3">
-              <a 
-                href="https://wa.me/919876543210?text=Hi,%20I'm%20interested%20in%20your%20jewelry%20collection"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  void openWhatsAppInquiry("Hi, I'm interested in your jewelry collection.");
+                }}
+                disabled={isOpeningWhatsApp}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded flex items-center justify-center gap-2 transition-colors"
               >
                 <WhatsAppIcon className="w-5 h-5" />
-                Start Chat
-              </a>
+                {isOpeningWhatsApp ? 'Opening...' : 'Start Chat'}
+              </button>
               <Button 
                 variant="outline" 
                 onClick={() => setIsWhatsAppDialogOpen(false)}
@@ -1207,14 +1238,16 @@ function App() {
       </Dialog>
 
       {/* Floating WhatsApp Button */}
-      <a 
-        href="https://wa.me/919876543210"
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={() => {
+          void openWhatsAppInquiry('Hi, I am interested in your jewelry collection.');
+        }}
+        aria-label="Open WhatsApp"
         className="fixed bottom-6 right-6 w-14 h-14 bg-green-600 hover:bg-green-700 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all z-40"
       >
         <WhatsAppIcon className="w-7 h-7 text-white" />
-      </a>
+      </button>
     </div>
   );
 }
