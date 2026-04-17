@@ -156,8 +156,8 @@ async function resolveTenant(): Promise<TenantIdentity> {
     }
   }
 
-  // Testing fallback: use the next tenant (second row), then fall back to the first.
-  const testingFallbackTenant = mapTenant(tenants[1] ?? tenants[0]);
+  // Testing fallback: use tenant one (the first row).
+  const testingFallbackTenant = mapTenant(tenants[0]);
   if (testingFallbackTenant) {
     return testingFallbackTenant;
   }

@@ -17,7 +17,9 @@ function formatPrice(value: number) {
 }
 
 type InquiryItem = {
+  productId: number;
   name: string;
+  image?: string;
   unitPrice: number;
   quantity: number;
   selection: {
@@ -27,11 +29,18 @@ type InquiryItem = {
   };
 };
 
-function buildCartInquiryMessage(items: InquiryItem[], subtotal: number, shipping: number, total: number) {
+function buildCartInquiryMessage(
+  items: InquiryItem[],
+  subtotal: number,
+  shipping: number,
+  total: number,
+  getProductUrl: (productId: number) => string,
+) {
   const lines = [
     'Hi, I would like to inquire about these products:',
     '',
     ...items.flatMap((item, index) => {
+      const productUrl = getProductUrl(item.productId);
       const lineTotal = item.unitPrice * item.quantity;
       return [
         `${index + 1}. ${item.name}`,
@@ -40,6 +49,8 @@ function buildCartInquiryMessage(items: InquiryItem[], subtotal: number, shippin
         `   Metal: ${item.selection.metal || 'N/A'}`,
         `   Carat: ${item.selection.carat || 0} ct`,
         `   Diamond Type: ${item.selection.diamondType || 'N/A'}`,
+        '   Product Page:',
+        `   ${productUrl}`,
         `   Line Total: ${formatPrice(lineTotal)}`,
         '',
       ];
@@ -59,6 +70,19 @@ function CartPage() {
   const shipping = subtotal > 150000 ? 0 : totalItems > 0 ? 1200 : 0;
   const estimatedTotal = subtotal + shipping;
 
+  const getProductHref = (productId: number) => {
+    const collection = collections.find((item) =>
+      item.products.some((product) => product.id === productId),
+    );
+
+    return collection
+      ? `/collections/${collection.slug}/product/${productId}`
+      : `/product/${productId}`;
+  };
+
+  const getProductUrl = (productId: number) =>
+    new URL(getProductHref(productId), window.location.origin).toString();
+
   const handleOpenInquiry = async () => {
     if (isOpeningInquiry) {
       return;
@@ -67,7 +91,13 @@ function CartPage() {
     setIsOpeningInquiry(true);
 
     try {
-      const message = buildCartInquiryMessage(cartItems, subtotal, shipping, estimatedTotal);
+      const message = buildCartInquiryMessage(
+        cartItems,
+        subtotal,
+        shipping,
+        estimatedTotal,
+        getProductUrl,
+      );
       const inquiryHref = await buildTenantWhatsappHref(message);
 
       if (!inquiryHref) {
@@ -84,16 +114,6 @@ function CartPage() {
     } finally {
       setIsOpeningInquiry(false);
     }
-  };
-
-  const getProductHref = (productId: number) => {
-    const collection = collections.find((item) =>
-      item.products.some((product) => product.id === productId),
-    );
-
-    return collection
-      ? `/collections/${collection.slug}/product/${productId}`
-      : '/';
   };
 
   return (
