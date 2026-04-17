@@ -1,6 +1,7 @@
 import { getCurrentTenant, getTenantStorageNamespace } from '@/lib/tenant';
 
 const ROUND_ROBIN_KEY_PREFIX = 'tenant_whatsapp_rr:';
+const DEFAULT_COUNTRY_CODE = '91';
 
 function asNonEmptyString(value: string | null | undefined): string | null {
   if (typeof value !== 'string') {
@@ -12,8 +13,36 @@ function asNonEmptyString(value: string | null | undefined): string | null {
 }
 
 function normalizeWhatsappNumber(value: string | null | undefined): string | null {
-  const normalized = asNonEmptyString(value)?.replace(/[^\d]/g, '') ?? '';
-  return normalized.length > 0 ? normalized : null;
+  const raw = asNonEmptyString(value);
+  if (!raw) {
+    return null;
+  }
+
+  const configuredCountryCode = asNonEmptyString(import.meta.env.VITE_WHATSAPP_DEFAULT_COUNTRY_CODE)
+    ?.replace(/[^\d]/g, '')
+    || DEFAULT_COUNTRY_CODE;
+
+  const digitsOnly = raw.replace(/[^\d]/g, '');
+  if (!digitsOnly) {
+    return null;
+  }
+
+  // Allow numbers entered as 00<country><number> by converting to standard country-number format.
+  if (digitsOnly.startsWith('00') && digitsOnly.length > 2) {
+    return digitsOnly.slice(2);
+  }
+
+  // Common local format: 10-digit mobile number without country code.
+  if (digitsOnly.length === 10) {
+    return `${configuredCountryCode}${digitsOnly}`;
+  }
+
+  // Common local format with trunk prefix (for example 0XXXXXXXXXX).
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('0')) {
+    return `${configuredCountryCode}${digitsOnly.slice(1)}`;
+  }
+
+  return digitsOnly;
 }
 
 function getFallbackWhatsappNumbers(): string[] {
