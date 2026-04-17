@@ -22,14 +22,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/context/CartContext';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { categories as localCatalogCategories, products } from '@/data/catalog';
+import { categories as localCatalogCategories } from '@/data/catalog';
 import { collections as localLandingCollections } from '@/data/collections';
 import { getShopStorageEventName, getWishlistIds, toggleWishlistItem } from '@/lib/shop-storage';
 import { buildTenantWhatsappHref } from '@/lib/whatsapp';
 import {
   fetchAllCategories,
   fetchAllCollections,
+  fetchBestSellerProducts,
   fetchMetalPriceTicker,
+  type ShopProductCard,
   type ShopCategory,
   type ShopCollection,
   type ShopMetalPriceTickerItem,
@@ -83,7 +85,7 @@ function App() {
   const isMobile = useIsMobile();
   const { totalItems, addToCart, cartItems } = useCart();
   const [isNavOpen, setIsNavOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<typeof products[0] | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ShopProductCard | null>(null);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
   const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
@@ -98,6 +100,8 @@ function App() {
   const [hoveredCollection, setHoveredCollection] = useState<string | null>(null);
   const [landingCollections, setLandingCollections] = useState<ShopCollection[]>(fallbackLandingCollections);
   const [landingCategories, setLandingCategories] = useState<HomeCategory[]>(fallbackHomeCategories);
+  const [bestSellerProducts, setBestSellerProducts] = useState<ShopProductCard[]>([]);
+  const [isBestSellerLoading, setIsBestSellerLoading] = useState(true);
   const [goldPriceTicker, setGoldPriceTicker] = useState<ShopMetalPriceTickerItem[]>(fallbackGoldPriceTicker);
   const [isOpeningWhatsApp, setIsOpeningWhatsApp] = useState(false);
   const [shouldPlayHeroVideo] = useState(() => {
@@ -276,10 +280,13 @@ function App() {
   useEffect(() => {
     let isMounted = true;
 
+    setIsBestSellerLoading(true);
+
     const loadHomeContent = async () => {
-      const [collectionsResult, categoriesResult, goldPricesResult] = await Promise.allSettled([
+      const [collectionsResult, categoriesResult, bestSellerResult, goldPricesResult] = await Promise.allSettled([
         fetchAllCollections(),
         fetchAllCategories(),
+        fetchBestSellerProducts(12),
         fetchMetalPriceTicker(),
       ]);
 
@@ -301,11 +308,20 @@ function App() {
         toast.error('Unable to load categories from Supabase. Showing local categories.');
       }
 
+      if (bestSellerResult.status === 'fulfilled') {
+        setBestSellerProducts(bestSellerResult.value);
+      } else {
+        setBestSellerProducts([]);
+        toast.error('Unable to load best sellers from Supabase.');
+      }
+
       if (goldPricesResult.status === 'fulfilled' && goldPricesResult.value.length > 0) {
         setGoldPriceTicker(goldPricesResult.value);
       } else {
         setGoldPriceTicker(fallbackGoldPriceTicker);
       }
+
+      setIsBestSellerLoading(false);
     };
 
     void loadHomeContent();
@@ -321,12 +337,12 @@ function App() {
     setWishlist(updated);
 
     if (isAdding) {
-      const productName = products.find((item) => item.id === id)?.name ?? 'Product';
+      const productName = bestSellerProducts.find((item) => item.id === id)?.name ?? 'Product';
       toast.success(`${productName} added to wishlist.`);
     }
   };
 
-  const addProductToCart = (product: (typeof products)[0]) => {
+  const addProductToCart = (product: ShopProductCard) => {
     addToCart({
       productId: product.id,
       name: product.name,
@@ -343,7 +359,7 @@ function App() {
     toast.success(`${product.name} added to cart.`);
   };
 
-  const openProductDialog = (product: typeof products[0]) => {
+  const openProductDialog = (product: ShopProductCard) => {
     setSelectedProduct(product);
     setIsProductDialogOpen(true);
   };
@@ -374,23 +390,6 @@ function App() {
       maximumFractionDigits: 0
     }).format(price);
   };
-
-  const bestSellerProducts = useMemo(() => {
-    const ranked = [...products].sort((a, b) => {
-      const byBestSeller = Number(b.isBestSeller) - Number(a.isBestSeller);
-      if (byBestSeller !== 0) return byBestSeller;
-      const byRating = b.rating - a.rating;
-      if (byRating !== 0) return byRating;
-      return b.price - a.price;
-    });
-
-    const selected = ranked.filter((item) => item.isBestSeller).slice(0, 3);
-    if (selected.length >= 3) {
-      return selected;
-    }
-
-    return ranked.slice(0, 3);
-  }, []);
 
   const cartProductIds = useMemo(() => {
     return new Set(cartItems.map((item) => item.productId));
@@ -860,9 +859,19 @@ function App() {
           </Link>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {bestSellerProducts.map((product) => (
-            <div key={product.id} className="product-card card-luxury group">
+        <div className="max-w-full overflow-x-auto overscroll-x-contain scrollbar-hide pb-2">
+          <div className="flex min-w-max gap-4 sm:gap-6 pr-1">
+            {isBestSellerLoading ? Array.from({ length: 4 }).map((_, index) => (
+              <div key={`best-seller-skeleton-${index}`} className="product-card card-luxury overflow-hidden border border-white/10 bg-black/20 w-[260px] sm:w-[280px] md:w-[300px] shrink-0">
+                <div className="aspect-square animate-pulse bg-white/5" />
+                <div className="p-6 space-y-3">
+                  <div className="h-3 w-24 animate-pulse bg-white/10" />
+                  <div className="h-5 w-3/4 animate-pulse bg-white/10" />
+                  <div className="h-4 w-20 animate-pulse bg-white/10" />
+                </div>
+              </div>
+            )) : bestSellerProducts.length > 0 ? bestSellerProducts.map((product) => (
+            <div key={product.id} className="product-card card-luxury group w-[260px] sm:w-[280px] md:w-[300px] shrink-0">
               <div className="relative overflow-hidden">
                 <div className="aspect-square">
                   <img 
@@ -918,7 +927,12 @@ function App() {
                 </div>
               </div>
             </div>
-          ))}
+            )) : (
+              <div className="w-[260px] sm:w-[280px] md:w-[300px] shrink-0 border border-white/10 bg-charcoal px-6 py-10 text-center text-gray-300">
+                Best sellers are not available right now.
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

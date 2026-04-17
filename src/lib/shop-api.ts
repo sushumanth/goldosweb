@@ -713,6 +713,26 @@ export async function fetchProductsByCategorySlug(slug: string): Promise<{ categ
   };
 }
 
+export async function fetchBestSellerProducts(limit = 12): Promise<ShopProductCard[]> {
+  const tenantId = await getCurrentTenantId();
+
+  const { data, error } = await supabase
+    .from('products')
+    .select('id, name, slug, sku, base_price, original_price, image_url, hover_image_url, description, long_description, rating, is_new, is_best_seller, is_engravable, stock_quantity, created_at, category_id, collection_id')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .eq('is_best_seller', true)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as ProductRow[];
+  return getProductCards(rows, tenantId);
+}
+
 export async function fetchCollectionBySlug(slug: string): Promise<ShopCollection | null> {
   const tenantId = await getCurrentTenantId();
   const normalizedSlug = normalizeSlug(slug);
